@@ -84,45 +84,42 @@ const client = twilio(accountSid, authToken);
 
 // // 2. Verify OTP and mark phone verified
 export const verifyOTP = catchAsync(async (req, res, next) => {
-  let { phone, code } = req.body;
+  const { phone, code } = req.body;
+  if (!phone || !code) return next(new AppError('Phone and OTP code required', 400));
 
-  if (!phone || !code) {
-    return next(new AppError('Phone and OTP code are required', 400));
-  }
-
-  // Normalize the phone number to +251 format
+  let normalizedPhone;
   try {
-    phone = normalizePhone(phone);
+    normalizedPhone = normalizePhone(phone);
   } catch (err) {
     return next(new AppError(err.message, 400));
   }
 
-  // Initialize Twilio client (use same pattern as in sendOTP)
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const client = twilio(accountSid, authToken);
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-  // Check the OTP using Twilio Verify
   const verificationCheck = await client.verify.v2
     .services(process.env.TWILIO_VERIFY_SERVICE_ID)
-    .verificationChecks.create({ to: phone, code });
+    .verificationChecks.create({ to: normalizedPhone, code });
 
   if (verificationCheck.status !== 'approved') {
-    return next(new AppError('Invalid or expired OTP code', 400));
+    return next(new AppError('Invalid or expired OTP', 400));
   }
 
-  // Mark phone as verified for an existing user if applicable
-  const user = await User.findOne({ phone });
-  if (user && !user.isPhoneVerified) {
+  // Find the user with this phone number
+  const user = await User.findOne({ phone: normalizedPhone });
+  if (!user) return next(new AppError('User not found with this phone number', 404));
+
+  // Update verification status
+  if (!user.isPhoneVerified) {
     user.isPhoneVerified = true;
     await user.save({ validateBeforeSave: false });
   }
 
   res.status(200).json({
     status: 'success',
-    message: 'Phone number successfully verified!'
+    message: 'Phone number successfully verified!',
   });
 });
+
 
 
 // // 3. Signup user (phone must be verified beforehand)
@@ -214,9 +211,7 @@ export const signup = catchAsync(async (req, res, next) => {
     password,
     passwordConfirm,
   };
-
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
   await client.verify.v2.services(process.env.TWILIO_VERIFY_SERVICE_ID)
     .verifications.create({
       to: normalizedPhone,
@@ -284,49 +279,90 @@ export const restrictTo = (...roles) => (req, res, next) => {
 };
 
 // 7. Request password reset OTP
+// export const requestPasswordResetOTP = catchAsync(async (req, res, next) => {
+//   let { phone } = req.body;
+//   if (!phone) return next(new AppError('Phone number required', 400));
+
+//   try {
+//     phone = normalizePhone(phone);
+//   } catch (err) {
+//     return next(new AppError(err.message, 400));
+//   }
+
+//   const user = await User.findOne({ phone });
+//   if (!user) return next(new AppError('No user with that phone', 404));
+
+//   await client.verify.v2
+//     .services(process.env.TWILIO_VERIFY_SERVICE_ID)
+//     .verifications.create({ to: phone, channel: 'sms' });
+
+//   res.status(200).json({ status: 'success', message: 'Password reset OTP sent' });
+// });
+
+
 export const requestPasswordResetOTP = catchAsync(async (req, res, next) => {
-  let { phone } = req.body;
+  const { phone } = req.body;
   if (!phone) return next(new AppError('Phone number required', 400));
 
+  let normalizedPhone;
   try {
-    phone = normalizePhone(phone);
+    normalizedPhone = normalizePhone(phone);
   } catch (err) {
     return next(new AppError(err.message, 400));
   }
 
-  const user = await User.findOne({ phone });
+  const user = await User.findOne({ phone: normalizedPhone });
   if (!user) return next(new AppError('No user with that phone', 404));
+
+  // Initialize Twilio client (just like in signup)
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
   await client.verify.v2
     .services(process.env.TWILIO_VERIFY_SERVICE_ID)
-    .verifications.create({ to: phone, channel: 'sms' });
+    .verifications.create({
+      body: `Hello from Gebeta! Your password reset code is: 123456`,
+      from: 'Gebeta Delivery',// Optional sender name
+      to: normalizedPhone,
+      channel: 'sms',
+    });
 
-  res.status(200).json({ status: 'success', message: 'Password reset OTP sent' });
+  res.status(200).json({
+    status: 'success',
+    message: `OTP sent to ${normalizedPhone} for password reset.`,
+  });
 });
 
 // 8. Reset password via OTP
-export const resetPasswordWithOTP = catchAsync(async (req, res, next) => {
-  let { phone, code, password, passwordConfirm } = req.body;
+export const resetPasswordWithOTP =  catchAsync(async (req, res, next) => {
+  const { phone, code, password, passwordConfirm } = req.body;
+
   if (!phone || !code || !password || !passwordConfirm) {
     return next(new AppError('Phone, OTP code, and new passwords are required', 400));
   }
 
+  let normalizedPhone;
   try {
-    phone = normalizePhone(phone);
+    normalizedPhone = normalizePhone(phone);
   } catch (err) {
     return next(new AppError(err.message, 400));
   }
 
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
   const verificationCheck = await client.verify.v2
     .services(process.env.TWILIO_VERIFY_SERVICE_ID)
-    .verificationChecks.create({ to: phone, code });
+    .verificationChecks.create({ to: normalizedPhone, code });
 
   if (verificationCheck.status !== 'approved') {
     return next(new AppError('Invalid or expired OTP', 400));
   }
 
-  const user = await User.findOne({ phone }).select('+password');
-  if (!user) return next(new AppError('No user with that phone', 404));
+  const user = await User.findOne({ phone: normalizedPhone }).select('+password');
+  if (!user) return next(new AppError('No user with that phone number', 404));
+
+  if (password !== passwordConfirm) {
+    return next(new AppError('Passwords do not match', 400));
+  }
 
   user.password = password;
   user.passwordConfirm = passwordConfirm;
@@ -334,6 +370,7 @@ export const resetPasswordWithOTP = catchAsync(async (req, res, next) => {
 
   createSendToken(user, 200, res);
 });
+
 
 // 9. Update password (authenticated user)
 export const updatePassword = catchAsync(async (req, res, next) => {
