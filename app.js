@@ -1,7 +1,7 @@
 import express from 'express';
 import morgan from 'morgan';
 import session from 'express-session';
-import dotenv from 'dotenv';
+
 import foodRoutes from "./routes/foodRoutes.js";
 import categoryRoutes from './routes/categoryRoutes.js';
 import restaurantRoutes from './routes/restaurantRoutes.js';
@@ -10,7 +10,16 @@ import cartRoutes from './routes/cartRoutes.js';
 import deliverRoutes from './routes/deliverRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import reviewRouter from './routes/reviewRoutes.js';
+import globalErrorHandler from './controllers/errorController.js';
+import cors from 'cors';
+
 const app = express();
+// app.use(cors({
+//   origin: 'http://localhost:3001', // update to your frontend domain in production
+//   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+//   credentials: true
+// }));
+
 
 // Middleware
 app.use(express.json());
@@ -38,5 +47,5 @@ app.use('/api/v1/restaurants/:restaurantId/reviews', reviewRouter);
 app.get('/', (req, res) => {
   res.status(200).json({ message: 'API is working 🚀' });
 });
-
+app.use(globalErrorHandler);
 export default app;

@@ -3,6 +3,17 @@ import Food from '../models/Food.js';
 import Transaction from '../models/Transaction.js';
 import mongoose from 'mongoose';
 
+
+const calculateTotalPrice = async (orderItems) => {
+  let total = 0;
+  for (const item of orderItems) {
+    const food = await Food.findById(item.foodId);
+    if (food) {
+      total += food.price * item.quantity;
+    }
+  }
+  return mongoose.Types.Decimal128.fromString(total.toFixed(2));
+};
 // 🛒 Create a new cart
 export const createCart = async (req, res) => {
   try {
@@ -46,28 +57,48 @@ export const addToCart = async (req, res) => {
     let cart = await Cart.findOne({ userId });
 
     if (!cart) {
+      // 🔸 Create new cart
       cart = await Cart.create({
         userId,
         orderItems: [{ foodId, quantity }]
       });
     } else {
+      // 🔸 Update existing cart
       const existingItem = cart.orderItems.find(item => item.foodId.toString() === foodId);
-
       if (existingItem) {
         existingItem.quantity += quantity || 1;
       } else {
         cart.orderItems.push({ foodId, quantity });
       }
-
       await cart.save();
     }
 
+    const totalPrice = await calculateTotalPrice(cart.orderItems);
+
+    // 🔄 Create or Update Transaction
+    const transaction = await Transaction.findOneAndUpdate(
+      { cart_id: cart._id },
+      {
+        cart_id: cart._id,
+        Total_Price: totalPrice,
+        Status: 'Pending',
+        Created_At: new Date()
+      },
+      { upsert: true, new: true }
+    );
+
     const populatedCart = await cart.populate('orderItems.foodId');
-    res.status(200).json({ status: 'success', data: populatedCart });
+
+    res.status(200).json({
+      status: 'success',
+      cart: populatedCart,
+      transaction
+    });
   } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
+    res.status(500).json({ status: 'error', message: err.message });
   }
 };
+
 
 // 🛠 Update cart (e.g. change status or delivery address)
 export const updateCart = async (req, res) => {

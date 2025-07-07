@@ -2,9 +2,8 @@ import User from '../models/userModel.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
 import cloudinary from '../utils/cloudinary.js';
-
-import { generateOTP } from '../utils/otp.js';
-import { sendSMS } from '../utils/smsSender.js';
+import streamifier from 'streamifier';
+import multer from 'multer';
 // Utility to filter only allowed fields from request body
 const filterObj = (obj, ...allowedFields) => {
   const newObj = {};

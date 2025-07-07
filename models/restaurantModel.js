@@ -123,6 +123,6 @@ restaurantSchema.virtual('shortDescription').get(function () {
 // Indexes
 restaurantSchema.index({ location: '2dsphere' });
 restaurantSchema.index({ slug: 1 });
-restaurantSchema.index({ license: 1 });
+
 
 export default mongoose.model('Restaurant', restaurantSchema);
