@@ -1,0 +1,14 @@
+[app]
+name = "gebeta-delivery"
+
+database = "mongodb"
+
+[env]
+NODE_ENV = "production"
+PORT = "3000"
+
+[build]
+command = "npm install"
+
+[deploy]
+command = "npm start"

@@ -21,7 +21,13 @@ const restaurantSchema = new mongoose.Schema(
       },
       coordinates: {
         type: [Number],
-        required: true
+        required: true,
+        validate: {
+          validator: function (val) {
+            return val.length === 2;
+          },
+          message: 'Coordinates must be [longitude, latitude]'
+        }
       },
       address: {
         type: String,
@@ -44,7 +50,14 @@ const restaurantSchema = new mongoose.Schema(
     managerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true
+      required: true,
+      validate: {
+        validator: async function (id) {
+          const user = await mongoose.model('User').findById(id);
+          return user?.role === 'Manager';
+        },
+        message: 'Assigned managerId must belong to a user with Manager role'
+      }
     },
     cuisineTypes: {
       type: [String],
@@ -58,7 +71,6 @@ const restaurantSchema = new mongoose.Schema(
       type: String,
       default: 'default-restaurant.jpg'
     },
-    gallery: [String],
     ratingAverage: {
       type: Number,
       default: 4.5,
@@ -80,9 +92,9 @@ const restaurantSchema = new mongoose.Schema(
     },
     isOpenNow: {
       type: Boolean,
-      default: true
+      default: true // ❗ must be updated via controller or scheduler logic
     },
-    secretRestaurant: {
+    active: {
       type: Boolean,
       default: false
     }
@@ -94,15 +106,25 @@ const restaurantSchema = new mongoose.Schema(
   }
 );
 
-// Generate slug from name
+// Generate slug on save
 restaurantSchema.pre('save', function (next) {
   this.slug = slugify(this.name, { lower: true });
   next();
 });
 
-// Exclude secret restaurants
+// Generate slug on name update
+restaurantSchema.pre('findOneAndUpdate', function (next) {
+  const update = this.getUpdate();
+  if (update.name) {
+    update.slug = slugify(update.name, { lower: true });
+    this.setUpdate(update);
+  }
+  next();
+});
+
+// Exclude inactive restaurants from queries
 restaurantSchema.pre(/^find/, function (next) {
-  this.find({ secretRestaurant: { $ne: true } });
+  this.find({ active: { $ne: false } });
   next();
 });
 
@@ -113,16 +135,21 @@ restaurantSchema.virtual('reviews', {
   localField: '_id'
 });
 
-// Virtual description snippet
+// Virtual short description
 restaurantSchema.virtual('shortDescription').get(function () {
   return this.location.description?.length > 50
     ? this.location.description.substring(0, 50) + '...'
     : this.location.description;
 });
 
+// Virtual count of reviews
+restaurantSchema.virtual('reviewCount').get(function () {
+  return this.reviews?.length || 0;
+});
+
 // Indexes
 restaurantSchema.index({ location: '2dsphere' });
 restaurantSchema.index({ slug: 1 });
-
+restaurantSchema.index({ managerId: 1 });
 
 export default mongoose.model('Restaurant', restaurantSchema);
