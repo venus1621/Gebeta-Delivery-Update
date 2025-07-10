@@ -6,6 +6,7 @@ import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
 
 import twilio from 'twilio';
+import { normalize } from 'path';
 
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -152,7 +153,9 @@ export const verifyOTP = catchAsync(async (req, res, next) => {
 
 export const verifySignupOTP = catchAsync(async (req, res, next) => {
   const { phone, code } = req.body;
-  if (!phone || !code) return next(new AppError('Phone and OTP code required', 400));
+
+  if (!phone || !code)
+    return next(new AppError('Phone and OTP code required', 400));
 
   let normalizedPhone;
   try {
@@ -171,29 +174,38 @@ export const verifySignupOTP = catchAsync(async (req, res, next) => {
     return next(new AppError('Invalid or expired OTP', 400));
   }
 
-  // Get signup data from session
-  const userData = req.session.signupData;
+  const existingUser = await User.findOne({ phone: normalizedPhone });
 
-  if (!userData || userData.phone !== normalizedPhone) {
-    return next(new AppError('Signup session expired or not found', 400));
+  if (existingUser) {
+    if (existingUser.active === false) {
+      existingUser.active = true;
+      existingUser.isPhoneVerified = true;
+      await existingUser.save();
+    }
+    return createSendToken(existingUser, 200, res);
   }
+  // If no user exists, create new one (since session isn't used)
+  
 
-  // Create new user and mark phone verified
   const newUser = await User.create({
-    ...userData,
+    password:normalizedPhone,
+    passwordConfirm: normalizedPhone,
+    phone: normalizedPhone,
     isPhoneVerified: true,
+    role: 'Customer', // Default role
   });
-
-  // Clear signup data from session after successful signup
-  delete req.session.signupData;
 
   createSendToken(newUser, 201, res);
 });
 
 
+
 // signup - store signup data temporarily in session and send OTP
 export const signup = catchAsync(async (req, res, next) => {
-  const { phone, password, passwordConfirm } = req.body;
+  const { phone } = req.body;
+
+  if (!phone)
+    return next(new AppError('Phone number is required', 400));
 
   let normalizedPhone;
   try {
@@ -202,15 +214,6 @@ export const signup = catchAsync(async (req, res, next) => {
     return next(new AppError(err.message, 400));
   }
 
-  const existingUser = await User.findOne({ phone: normalizedPhone });
-  if (existingUser) return next(new AppError('Phone already registered', 400));
-
-  // Store signup data in session (expires when session expires)
-  req.session.signupData = {
-    phone: normalizedPhone,
-    password,
-    passwordConfirm,
-  };
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
   await client.verify.v2.services(process.env.TWILIO_VERIFY_SERVICE_ID)
     .verifications.create({
@@ -220,9 +223,10 @@ export const signup = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    message: `OTP sent to ${normalizedPhone}. Please verify to complete signup.`,
+    message: `OTP sent to ${normalizedPhone}. Submit full signup data along with code to verify.`,
   });
 });
+
 
 
 
