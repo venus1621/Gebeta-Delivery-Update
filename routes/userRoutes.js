@@ -55,7 +55,7 @@ router.post('/resetPasswordOTP', resetPasswordWithOTP);
 // =======================
 // 🔐 Protected Routes (Require Authentication)
 // =======================
-router.use(protect);
+// router.use(protect);
 
 // Update current user's password
 router.patch('/updateMyPassword', updatePassword);
@@ -72,7 +72,7 @@ router.post('/addAddress', addAddressToUser);
 // =======================
 // 🛡️ Admin-Only Routes
 // =======================
-router.use(restrictTo('Admin'));
+// router.use(restrictTo('Admin'));
 
 // Admin: GET all users / Create user
 router
