@@ -157,7 +157,8 @@ export const addAddressToUser = catchAsync(async (req, res, next) => {
 
   // Add new address
   user.addresses.push(newAddress);
-  await user.save();
+  await user.save({ validateBeforeSave: false });
+
 
   res.status(201).json({
     status: 'success',

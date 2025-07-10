@@ -99,25 +99,53 @@ export const signup = catchAsync(async (req, res, next) => {
 // ✅ 4. Verify Signup & Create User
 export const verifySignupOTP = catchAsync(async (req, res, next) => {
   const { phone, code } = req.body;
-  if (!phone || !code) return next(new AppError('Phone and OTP code required', 400));
 
-  const normalizedPhone = normalizePhone(phone);
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  // Validate input
+  if (!phone || !code) {
+    return next(new AppError('Phone and OTP code required', 400));
+  }
 
-  const check = await client.verify.v2.services(process.env.TWILIO_VERIFY_SERVICE_ID)
-    .verificationChecks.create({ to: normalizedPhone, code });
+  // Normalize phone number (e.g., to +251...)
+  let normalizedPhone;
+  try {
+    normalizedPhone = normalizePhone(phone);
+  } catch (err) {
+    return next(new AppError('Invalid phone number format', 400));
+  }
 
-  if (check.status !== 'approved') return next(new AppError('OTP invalid', 400));
+  // Init Twilio
+  const client = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+  );
 
+  // 🛠 Ensure verificationChecks is correctly spelled
+  let check;
+  try {
+    check = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_ID)
+      .verificationChecks.create({ to: normalizedPhone, code });
+  } catch (err) {
+    console.error('Twilio Verify Error:', err);
+    return next(new AppError('Failed to verify OTP. Check credentials or service ID.', 500));
+  }
+
+  // Check if OTP is correct
+  if (check.status !== 'approved') {
+    return next(new AppError('OTP invalid or expired', 400));
+  }
+
+  // Find user by phone
   let user = await User.findOne({ phone: normalizedPhone });
 
   if (user) {
     user.active = true;
     user.isPhoneVerified = true;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
     return createSendToken(user, 200, res);
   }
 
+  // No user exists → create one with default role
   user = await User.create({
     phone: normalizedPhone,
     password: normalizedPhone,
@@ -128,6 +156,7 @@ export const verifySignupOTP = catchAsync(async (req, res, next) => {
 
   createSendToken(user, 201, res);
 });
+
 
 // 🔑 5. Login
 export const login = catchAsync(async (req, res, next) => {
