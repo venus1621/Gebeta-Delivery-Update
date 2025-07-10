@@ -19,7 +19,8 @@ import {
   updateUser,
   deleteUser,
   updateMe,
-  deleteMe
+  deleteMe,
+  addAddressToUser
 } from '../controllers/userController.js';
 
 import upload from '../utils/upload.js';
@@ -47,6 +48,7 @@ router.use(protect);
 router.patch('/updateMyPassword', updatePassword);
 router.patch('/updateMe', upload.single('profilePicture'), updateMe);
 router.delete('/deleteMe', deleteMe);
+router.post('/addAddress', addAddressToUser); // Add address to user profile
 
 // =======================
 // 🛡️ Admin-Only Routes

@@ -134,3 +134,34 @@ export const deleteUser = catchAsync(async (req, res, next) => {
     data: null
   });
 });
+
+export const addAddressToUser = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const newAddress = req.body;
+
+  // Validate required fields
+  const requiredFields = ['name', 'label', 'coordinates'];
+  for (let field of requiredFields) {
+    if (!newAddress[field] || (field === 'coordinates' && (!newAddress.coordinates.lat || !newAddress.coordinates.lng))) {
+      return next(new AppError(`Missing required field: ${field}`, 400));
+    }
+  }
+
+  const user = await User.findById(userId);
+  if (!user) return next(new AppError('User not found', 404));
+
+  // If this address is set as default, unset all others
+  if (newAddress.isDefault) {
+    user.addresses.forEach(addr => (addr.isDefault = false));
+  }
+
+  // Add new address
+  user.addresses.push(newAddress);
+  await user.save();
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Address added successfully',
+    addresses: user.addresses
+  });
+});

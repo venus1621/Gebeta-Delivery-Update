@@ -6,12 +6,12 @@ const userSchema = new mongoose.Schema(
   {
     firstName: {
       type: String,
-      // required: [true, 'Please tell us your first name'],
+      required: [true, 'Please tell us your first name'],
       trim: true,
+      default:'User'
     },
     lastName: {
       type: String,
-      // required: [true, 'Please tell us your last name'],
       trim: true,
     },
     phone: {
@@ -45,6 +45,7 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Please provide a password'],
       minlength: 8,
       select: false,
+     
     },
     passwordConfirm: {
       type: String,
@@ -55,8 +56,29 @@ const userSchema = new mongoose.Schema(
         },
         message: 'Passwords do not match!',
       },
+     
     },
+   addresses: [
+  {
+    Name:{type:String},
+    label: {
+      type: String,
+      enum: ['Home', 'Work', 'Other'],
+      default: 'Home'
+    },
+    additionalInfo: String,
+    isDefault: {
+      type: Boolean,
+      default: false
+    },
+    coordinates: {
+      lat: { type: Number },
+      lng: { type: Number }
+    }
+  }
+]
 
+,
     role: {
       type: String,
       enum: ['Customer', 'Manager', 'Delivery_Person', 'Admin'],
