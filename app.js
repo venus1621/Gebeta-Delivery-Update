@@ -47,5 +47,5 @@ app.use('/api/v1/restaurants/:restaurantId/reviews', reviewRouter);
 app.get('/', (req, res) => {
   res.status(200).json({ message: 'API is working 🚀' });
 });
-app.use(globalErrorHandler);
+// app.use(globalErrorHandler);
 export default app;
