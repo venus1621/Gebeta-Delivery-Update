@@ -62,7 +62,8 @@ const restaurantSchema = new mongoose.Schema(
     cuisineTypes: {
       type: [String],
       enum: {
-        values: ['Ethiopian', 'Italian', 'Chinese', 'Indian', 'Fast Food', 'Vegan'],
+        values: ['Ethiopian', 'Italian', 'Chinese', 'Indian', 'Fast Food', 'Vegan','Other'
+        ],
         message: 'Not a supported cuisine'
       },
       default: []

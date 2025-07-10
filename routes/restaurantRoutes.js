@@ -31,6 +31,7 @@ const resizeRestaurantImage = async (req, res, next) => {
 router
   .route('/')
   .get(restaurantController.getAllRestaurants)
+  
   .post(
     protect,
     restrictTo('manager', 'admin'),
@@ -38,6 +39,7 @@ router
     resizeRestaurantImage,
     restaurantController.createRestaurant
   );
+  router.get('/distance-from-coords', restaurantController.getRestaurantsWithDistanceFromCoords);
 
 router
   .route('/:id')

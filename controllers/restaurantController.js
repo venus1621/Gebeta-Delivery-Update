@@ -3,6 +3,8 @@ import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
 import APIFeatures from '../utils/apiFeatures.js';
 import User from '../models/userModel.js';
+import axios from 'axios';
+import NodeGeocoder from 'node-geocoder';
 // Alias for top 5 rated restaurants
 export const aliasTopRestaurants = (req, res, next) => {
   req.query.limit = '5';
@@ -10,7 +12,63 @@ export const aliasTopRestaurants = (req, res, next) => {
   req.query.fields = 'name,location,ratingAverage,cuisineTypes,deliveryRadiusMeters';
   next();
 };
+const geocoder = NodeGeocoder({
+  provider: 'openstreetmap'
+});
 
+
+export const getRestaurantsWithDistanceFromCoords = catchAsync(async (req, res, next) => {
+  const { lng, lat } = req.query;
+
+  if (!lng || !lat) {
+    return next(new AppError('Please provide longitude (lng) and latitude (lat) in query.', 400));
+  }
+
+  const userCoords = [parseFloat(lng), parseFloat(lat)];
+
+  // Fetch all active restaurants
+  const restaurants = await Restaurant.find({ active: true });
+
+  // Map over restaurants and get distance & duration from OSRM
+  const results = await Promise.all(
+    restaurants.map(async (restaurant) => {
+      const restCoords = restaurant.location.coordinates; // [lng, lat]
+
+      try {
+        // OSRM route API to get driving distance and duration
+        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${restCoords[0]},${restCoords[1]}?overview=false`;
+        const response = await axios.get(osrmUrl);
+
+        const route = response.data.routes?.[0];
+        const distance = route?.distance || null; // meters
+        const duration = route?.duration || null; // seconds
+
+        return {
+          ...restaurant.toObject(),
+          distanceMeters: distance ? Math.round(distance) : null,
+          durationMinutes: duration ? Math.round(duration / 60) : null
+        };
+      } catch (error) {
+        console.error('OSRM Error:', error.message);
+        return {
+          ...restaurant.toObject(),
+          distanceMeters: null,
+          durationMinutes: null
+        };
+      }
+    })
+  );
+
+  // Sort by nearest distance first
+  const sorted = results.filter(r => r.distanceMeters !== null)
+                        .sort((a, b) => a.distanceMeters - b.distanceMeters);
+
+  res.status(200).json({
+    status: 'success',
+    results: sorted.length,
+    data: sorted
+  });
+});
 // Get all restaurants with filtering, sorting, pagination & search
 export const getAllRestaurants = catchAsync(async (req, res, next) => {
   const features = new APIFeatures(Restaurant.find(), req.query)
