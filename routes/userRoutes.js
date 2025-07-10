@@ -30,40 +30,61 @@ const router = express.Router();
 // =======================
 // 🔓 Public Authentication Routes
 // =======================
+
+// User signup - triggers OTP to phone
 router.post('/signup', signup);
+
+// Login with phone & password
 router.post('/login', login);
 
-// ✅ Twilio OTP Flow
-router.post('/sendOTP', sendOTP); // Send OTP for phone verification
-router.post('/verifyOTP', verifyOTP); // Verify the OTP after receiving it
-router.post('/verifySignupOTP', verifySignupOTP); // Verify OTP during signup
-router.post('/requestResetOTP', requestPasswordResetOTP); // Send OTP for password reset
-router.post('/resetPasswordOTP', resetPasswordWithOTP); // Reset password via OTP
+// Send OTP for verification (e.g., during signup)
+router.post('/sendOTP', sendOTP);
+
+// Verify OTP code (generic use)
+router.post('/verifyOTP', verifyOTP);
+
+// Finalize signup using OTP and create account
+router.post('/verifySignupOTP', verifySignupOTP);
+
+// Request password reset OTP
+router.post('/requestResetOTP', requestPasswordResetOTP);
+
+// Reset password using OTP
+router.post('/resetPasswordOTP', resetPasswordWithOTP);
 
 // =======================
-// 🔐 Protected Routes (Require Login)
+// 🔐 Protected Routes (Require Authentication)
 // =======================
 router.use(protect);
 
+// Update current user's password
 router.patch('/updateMyPassword', updatePassword);
+
+// Update current user's profile info (with optional profile picture)
 router.patch('/updateMe', upload.single('profilePicture'), updateMe);
+
+// Soft delete (deactivate) current user's account
 router.delete('/deleteMe', deleteMe);
-router.post('/addAddress', addAddressToUser); // Add address to user profile
+
+// Add a new address to current user
+router.post('/addAddress', addAddressToUser);
 
 // =======================
 // 🛡️ Admin-Only Routes
 // =======================
 router.use(restrictTo('Admin'));
 
+// Admin: GET all users / Create user
 router
   .route('/')
-  .get(getAllUsers)       // GET all users (Admin)
-  .post(createUser);      // Create new user (Admin)
+  .get(getAllUsers)
+  .post(createUser);
 
+// Admin: GET / PATCH / DELETE specific user
 router
   .route('/:id')
-  .get(getUser)           // GET user by ID (Admin)
-  .patch(updateUser)      // Update user (Admin)
-  .delete(deleteUser);    // Delete user (Admin)
+  .get(getUser)
+  .patch(updateUser)
+  .delete(deleteUser);
 
 export default router;
