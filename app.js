@@ -34,13 +34,14 @@ app.use(session({
   }
 }));
 app.use(morgan('dev'));
+app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/foods', foodRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
 app.use('/api/v1/menus', foodMenuRoutes);
 app.use('/api/v1/carts', cartRoutes);
 app.use('/api/v1/deliveries', deliverRoutes);
-app.use('/api/v1/users', userRoutes);
+
 app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/restaurants/:restaurantId/reviews', reviewRouter);
 // Example route
@@ -49,5 +50,5 @@ app.get('/', (req, res) => {
 });
 console.log('Verify SID:', process.env.TWILIO_VERIFY_SERVICE_ID);
 
-// app.use(globalErrorHandler);
+app.use(globalErrorHandler);
 export default app;
