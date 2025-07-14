@@ -19,7 +19,7 @@ const app = express();
 //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 //   credentials: true
 // }));
-
+app.use(cors());
 
 // Middleware
 app.use(express.json());
