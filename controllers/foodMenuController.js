@@ -13,7 +13,7 @@ export const createMenu = catchAsync(async (req, res, next) => {
   }
 
   if (
-    req.user.role === 'Manager' &&
+    req.user.role !== 'Manager' &&
     restaurant.managerId.toString() !== req.user.id
   ) {
     return next(
