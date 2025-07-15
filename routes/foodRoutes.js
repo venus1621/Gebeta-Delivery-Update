@@ -1,21 +1,39 @@
 import express from 'express';
 import {
   createFood,
-  getAllFood,
+  getAllFoods,
   getFood,
   updateFood,
-  deleteFood
+  deleteFood,
+  uploadFoodImageToCloudinary
 } from '../controllers/foodController.js';
+
+import { protect, restrictTo } from '../controllers/authController.js';
+import { upload } from '../utils/uploadFoodImage.js'; // your multer setup
 
 const router = express.Router();
 
-router.route('/')
-  .get(getAllFood)
-  .post(createFood);
+router
+  .route('/')
+  .get(getAllFoods)
+  .post(
+    protect,
+    restrictTo('Admin', 'Manager'),
+    upload.single('image'),
+    uploadFoodImageToCloudinary,
+    createFood
+  );
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(getFood)
-  .patch(updateFood)
-  .delete(deleteFood);
+  .patch(
+    protect,
+    restrictTo('Admin', 'Manager'),
+    upload.single('image'),
+    uploadFoodImageToCloudinary,
+    updateFood
+  )
+  .delete(protect, restrictTo('Admin', 'Manager'), deleteFood);
 
 export default router;

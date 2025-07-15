@@ -1,21 +1,17 @@
 import express from 'express';
-import {
-  createCategory,
-  getAllCategories,
-  getCategory,
-  updateCategory,
-  deleteCategory
-} from '../controllers/categoryController.js';
+import * as categoryController from '../controllers/categoryController.js';
+import { protect, restrictTo } from '../controllers/authController.js';
 
 const router = express.Router();
 
-router.route('/')
-  .get(getAllCategories)
-  .post(createCategory);
+// Public routes
+router.get('/', categoryController.getAllCategories);
+router.get('/:id', categoryController.getCategory);
 
-router.route('/:id')
-  .get(getCategory)
-  .patch(updateCategory)
-  .delete(deleteCategory);
+// Protected routes (Admin only)
+router.use(protect);
+router.post('/', restrictTo('Admin'), categoryController.createCategory);
+router.patch('/:id', restrictTo('Admin'), categoryController.updateCategory);
+router.delete('/:id', restrictTo('Admin'), categoryController.deleteCategory);
 
 export default router;

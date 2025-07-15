@@ -1,64 +1,118 @@
 import FoodMenu from '../models/FoodMenu.js';
+import Restaurant from '../models/restaurantModel.js';
+import AppError from '../utils/appError.js';
+import catchAsync from '../utils/catchAsync.js';
 
-// CREATE a new food menu
-export const createMenu = async (req, res) => {
-  try {
-    const menu = await FoodMenu.create(req.body);
-    res.status(201).json({ status: 'success', data: menu });
-  } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
+// CREATE a new menu
+export const createMenu = catchAsync(async (req, res, next) => {
+  const { restaurantId } = req.body;
+
+  const restaurant = await Restaurant.findById(restaurantId);
+  if (!restaurant || !restaurant.active) {
+    return next(new AppError('Restaurant does not exist or is inactive', 404));
   }
-};
 
-// READ all food menus
-export const getAllMenus = async (req, res) => {
-  try {
-    const menus = await FoodMenu.find().populate('restaurantId');
-    res.status(200).json({
-      status: 'success',
-      results: menus.length,
-      data: menus
-    });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
+  if (
+    req.user.role === 'Manager' &&
+    restaurant.managerId.toString() !== req.user.id
+  ) {
+    return next(
+      new AppError('You are not authorized to create a menu for this restaurant', 403)
+    );
   }
-};
 
-// READ one menu by ID
-export const getMenu = async (req, res) => {
-  try {
-    const menu = await FoodMenu.findById(req.params.id).populate('restaurantId');
-    if (!menu) return res.status(404).json({ status: 'fail', message: 'Menu not found' });
+  const menu = await FoodMenu.create(req.body);
+  await menu.populate('restaurantId');
 
-    res.status(200).json({ status: 'success', data: menu });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
+  res.status(201).json({
+    status: 'success',
+    data: menu
+  });
+});
+
+// GET all menus (with filters)
+export const getAllMenus = catchAsync(async (req, res, next) => {
+  const queryObj = {};
+
+  if (req.query.restaurantId) queryObj.restaurantId = req.query.restaurantId;
+  if (req.query.menuType) queryObj.menuType = req.query.menuType;
+  if (req.query.active) queryObj.active = req.query.active === 'true';
+
+  const menus = await FoodMenu.find(queryObj).populate('restaurantId');
+
+  res.status(200).json({
+    status: 'success',
+    results: menus.length,
+    data: menus
+  });
+});
+
+// GET single menu
+export const getMenu = catchAsync(async (req, res, next) => {
+  const menu = await FoodMenu.findById(req.params.id).populate('restaurantId');
+
+  if (!menu) {
+    return next(new AppError('Menu not found', 404));
   }
-};
 
-// UPDATE a food menu
-export const updateMenu = async (req, res) => {
-  try {
-    const menu = await FoodMenu.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-    if (!menu) return res.status(404).json({ status: 'fail', message: 'Menu not found' });
+  // Find all foods linked to this menu
+  const foods = await Food.find({ menuId: menu._id });
 
-    res.status(200).json({ status: 'success', data: menu });
-  } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
+  res.status(200).json({
+    status: 'success',
+    data: {
+      menu,
+      foods
+    }
+  });
+});
+
+// UPDATE menu
+export const updateMenu = catchAsync(async (req, res, next) => {
+  const menu = await FoodMenu.findById(req.params.id);
+  if (!menu) return next(new AppError('Menu not found', 404));
+
+  const restaurant = await Restaurant.findById(menu.restaurantId);
+  if (!restaurant) return next(new AppError('Restaurant not found', 404));
+
+  if (
+    req.user.role === 'Manager' &&
+    restaurant.managerId.toString() !== req.user.id
+  ) {
+    return next(new AppError('You are not authorized to update this menu', 403));
   }
-};
 
-// DELETE a food menu
-export const deleteMenu = async (req, res) => {
-  try {
-    const menu = await FoodMenu.findByIdAndDelete(req.params.id);
-    if (!menu) return res.status(404).json({ status: 'fail', message: 'Menu not found' });
+  const updatedMenu = await FoodMenu.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true
+  }).populate('restaurantId');
 
-    res.status(204).json({ status: 'success', data: null });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
+  res.status(200).json({
+    status: 'success',
+    data: updatedMenu
+  });
+});
+
+// DELETE (soft) menu
+export const deleteMenu = catchAsync(async (req, res, next) => {
+  const menu = await FoodMenu.findById(req.params.id);
+  if (!menu) return next(new AppError('Menu not found', 404));
+
+  const restaurant = await Restaurant.findById(menu.restaurantId);
+  if (!restaurant) return next(new AppError('Restaurant not found', 404));
+
+  if (
+    req.user.role === 'Manager' &&
+    restaurant.managerId.toString() !== req.user.id
+  ) {
+    return next(new AppError('You are not authorized to delete this menu', 403));
   }
-};
+
+  menu.active = false;
+  await menu.save();
+
+  res.status(204).json({
+    status: 'success',
+    data: null
+  });
+});

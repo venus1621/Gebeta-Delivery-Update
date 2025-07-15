@@ -7,15 +7,19 @@ import {
   deleteMenu
 } from '../controllers/foodMenuController.js';
 
+import { protect, restrictTo } from '../controllers/authController.js';
+
 const router = express.Router();
 
-router.route('/')
+router
+  .route('/')
   .get(getAllMenus)
-  .post(createMenu);
+  .post(protect, restrictTo('Admin', 'Manager'), createMenu);
 
-router.route('/:id')
+router
+  .route('/:id')
   .get(getMenu)
-  .patch(updateMenu)
-  .delete(deleteMenu);
+  .patch(protect, restrictTo('Admin', 'Manager'), updateMenu)
+  .delete(protect, restrictTo('Admin', 'Manager'), deleteMenu);
 
 export default router;

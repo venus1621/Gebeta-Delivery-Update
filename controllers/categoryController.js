@@ -1,60 +1,61 @@
 import FoodCategory from '../models/FoodCategory.js';
+import catchAsync from '../utils/catchAsync.js';
+import AppError from '../utils/appError.js';
 
 // Create new category
-export const createCategory = async (req, res) => {
-  try {
-    const category = await FoodCategory.create(req.body);
-    res.status(201).json({ status: 'success', data: category });
-  } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
-  }
-};
+export const createCategory = catchAsync(async (req, res, next) => {
+  const category = await FoodCategory.create(req.body);
+  res.status(201).json({
+    status: 'success',
+    data: category
+  });
+});
 
-// Get all categories
-export const getAllCategories = async (req, res) => {
-  try {
-    const categories = await FoodCategory.find();
-    res.status(200).json({ status: 'success', results: categories.length, data: categories });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
-  }
-};
+// Get all categories (optionally only active)
+export const getAllCategories = catchAsync(async (req, res, next) => {
+  const filter = req.query.active === 'false' ? {} : { isActive: true };
+  const categories = await FoodCategory.find(filter);
+  res.status(200).json({
+    status: 'success',
+    results: categories.length,
+    data: categories
+  });
+});
 
-// Get single category
-export const getCategory = async (req, res) => {
-  try {
-    const category = await FoodCategory.findById(req.params.id);
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+// Get a single category
+export const getCategory = catchAsync(async (req, res, next) => {
+  const category = await FoodCategory.findById(req.params.id);
+  if (!category) return next(new AppError('Category not found', 404));
 
-    res.status(200).json({ status: 'success', data: category });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
-  }
-};
+  res.status(200).json({
+    status: 'success',
+    data: category
+  });
+});
 
-// Update category
-export const updateCategory = async (req, res) => {
-  try {
-    const category = await FoodCategory.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+// Update a category
+export const updateCategory = catchAsync(async (req, res, next) => {
+  const category = await FoodCategory.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true
+  });
 
-    res.status(200).json({ status: 'success', data: category });
-  } catch (err) {
-    res.status(400).json({ status: 'fail', message: err.message });
-  }
-};
+  if (!category) return next(new AppError('Category not found', 404));
 
-// Delete category
-export const deleteCategory = async (req, res) => {
-  try {
-    const category = await FoodCategory.findByIdAndDelete(req.params.id);
-    if (!category) return res.status(404).json({ message: 'Category not found' });
+  res.status(200).json({
+    status: 'success',
+    data: category
+  });
+});
 
-    res.status(204).json({ status: 'success', data: null });
-  } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
-  }
-};
+// Soft delete a category
+export const deleteCategory = catchAsync(async (req, res, next) => {
+  const category = await FoodCategory.findByIdAndUpdate(req.params.id, { isActive: false });
+
+  if (!category) return next(new AppError('Category not found', 404));
+
+  res.status(204).json({
+    status: 'success',
+    data: null
+  });
+});
