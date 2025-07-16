@@ -1,12 +1,13 @@
 import express from 'express';
 import morgan from 'morgan';
 import session from 'express-session';
+import transactionRoutes from './routes/transactionRoutes.js';
 
 import foodRoutes from "./routes/foodRoutes.js";
 import categoryRoutes from './routes/categoryRoutes.js';
 import restaurantRoutes from './routes/restaurantRoutes.js';
 import foodMenuRoutes from './routes/foodMenuRoutes.js';
-import cartRoutes from './routes/cartRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
 import deliverRoutes from './routes/deliverRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import reviewRouter from './routes/reviewRoutes.js';
@@ -39,9 +40,9 @@ app.use('/api/v1/foods', foodRoutes);
 app.use('/api/v1/food-categories', categoryRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
 app.use('/api/v1/food-menus', foodMenuRoutes);
-app.use('/api/v1/carts', cartRoutes);
+app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/deliveries', deliverRoutes);
-
 app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/restaurants/:restaurantId/reviews', reviewRouter);
 // Example route
