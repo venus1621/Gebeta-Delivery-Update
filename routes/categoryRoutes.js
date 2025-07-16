@@ -10,8 +10,8 @@ router.get('/:id', categoryController.getCategory);
 
 // Protected routes (Admin only)
 router.use(protect);
-router.post('/', restrictTo('Admin'), categoryController.createCategory);
-router.patch('/:id', restrictTo('Admin'), categoryController.updateCategory);
-router.delete('/:id', restrictTo('Admin'), categoryController.deleteCategory);
+router.post('/',restrictTo('Admin', 'Manager'), categoryController.createCategory);
+router.patch('/:id', restrictTo('Admin', 'Manager'), categoryController.updateCategory);
+router.delete('/:id', restrictTo('Admin', 'Manager'), categoryController.deleteCategory);
 
 export default router;

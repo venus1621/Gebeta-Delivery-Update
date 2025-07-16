@@ -1,5 +1,6 @@
 import FoodMenu from '../models/FoodMenu.js';
 import Restaurant from '../models/restaurantModel.js';
+import Food from '../models/Food.js'; // You forgot to import this
 import AppError from '../utils/appError.js';
 import catchAsync from '../utils/catchAsync.js';
 
@@ -48,8 +49,9 @@ export const getAllMenus = catchAsync(async (req, res, next) => {
 });
 
 // GET single menu
+// GET single menu
 export const getMenu = catchAsync(async (req, res, next) => {
-  const menu = await FoodMenu.findById(req.params.id).populate('restaurantId');
+  const menu = await FoodMenu.findById(req.params.id);
 
   if (!menu) {
     return next(new AppError('Menu not found', 404));

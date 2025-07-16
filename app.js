@@ -36,9 +36,9 @@ app.use(session({
 app.use(morgan('dev'));
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/foods', foodRoutes);
-app.use('/api/v1/categories', categoryRoutes);
+app.use('/api/v1/food-categories', categoryRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
-app.use('/api/v1/menus', foodMenuRoutes);
+app.use('/api/v1/food-menus', foodMenuRoutes);
 app.use('/api/v1/carts', cartRoutes);
 app.use('/api/v1/deliveries', deliverRoutes);
 

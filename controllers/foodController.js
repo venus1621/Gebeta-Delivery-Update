@@ -37,9 +37,9 @@ const checkManagerAccess = async (menuId, user) => {
   const restaurant = await Restaurant.findById(menu.restaurantId);
   if (!restaurant) throw new AppError('Restaurant not found', 404);
 
-  if (user.role === 'Manager' && restaurant.managerId.toString() !== user.id) {
-    throw new AppError('Not authorized to access this menu', 403);
-  }
+  // if ( restaurant.managerId.toString() !== user.id) {
+  //   throw new AppError('Not authorized to access this menu', 403);
+  // }
 
   return { menu, restaurant };
 };
