@@ -6,7 +6,7 @@ import Transaction from '../models/Transaction.js';
 export const placeOrder = async (req, res, next) => {
   try {
     const { orderItems, deliveryAddress } = req.body;
-    const { userId } = req.user; // Assuming authentication middleware injects user
+    const { userId } = req.body; // Auth middleware provides this
 
     if (!orderItems || orderItems.length === 0) {
       return res.status(400).json({ message: 'No order items provided.' });
@@ -22,6 +22,7 @@ export const placeOrder = async (req, res, next) => {
       totalPrice += food.price * item.quantity;
     }
 
+    // 🔹 First create the Order
     const order = await Order.create({
       userId,
       orderItems,
@@ -29,8 +30,9 @@ export const placeOrder = async (req, res, next) => {
       totalPrice,
     });
 
+    // 🔹 Then create the Transaction linked to the Order
     const transaction = await Transaction.create({
-      cart_id: null,
+      orderId: order._id,
       Total_Price: totalPrice,
     });
 
@@ -45,6 +47,7 @@ export const placeOrder = async (req, res, next) => {
     next(error);
   }
 };
+
 
 // Get my Orders
 export const getMyOrders = async (req, res, next) => {
