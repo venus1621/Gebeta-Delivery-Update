@@ -31,22 +31,22 @@ const router = express.Router();
 // 🔓 Public Authentication Routes
 // =======================
 
-// User signup - triggers OTP to phone
+// Signup with OTP
 router.post('/signup', signup);
 
 // Login with phone & password
 router.post('/login', login);
 
-// Send OTP for verification (e.g., during signup)
+// Send OTP (generic use)
 router.post('/sendOTP', sendOTP);
 
-// Verify OTP code (generic use)
+// Verify OTP code
 router.post('/verifyOTP', verifyOTP);
 
-// Finalize signup using OTP and create account
+// Complete signup with OTP
 router.post('/verifySignupOTP', verifySignupOTP);
 
-// Request password reset OTP
+// Request password reset via OTP
 router.post('/requestResetOTP', requestPasswordResetOTP);
 
 // Reset password using OTP
@@ -55,32 +55,35 @@ router.post('/resetPasswordOTP', resetPasswordWithOTP);
 // =======================
 // 🔐 Protected Routes (Require Authentication)
 // =======================
-// router.use(protect);
+
+// Apply protect middleware to all routes below
+router.use(protect);
 
 // Update current user's password
 router.patch('/updateMyPassword', updatePassword);
 
-// Update current user's profile info (with optional profile picture)
+// Update current user's profile info
 router.patch('/updateMe', upload.single('profilePicture'), updateMe);
 
-// Soft delete (deactivate) current user's account
+// Soft delete current user's account
 router.delete('/deleteMe', deleteMe);
 
-// Add a new address to current user
+// Add an address to current user
 router.post('/addAddress', addAddressToUser);
 
 // =======================
 // 🛡️ Admin-Only Routes
 // =======================
-// router.use(restrictTo('Admin'));
 
-// Admin: GET all users / Create user
+router.use(restrictTo('Admin'));
+
+// Admin: Get all users / create new user
 router
   .route('/')
   .get(getAllUsers)
   .post(createUser);
 
-// Admin: GET / PATCH / DELETE specific user
+// Admin: Get / update / delete specific user by ID
 router
   .route('/:id')
   .get(getUser)
