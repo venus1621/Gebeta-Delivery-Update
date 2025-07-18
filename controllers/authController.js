@@ -31,7 +31,7 @@ const createSendToken = (user, statusCode, res) => {
   res.cookie('jwt', token, cookieOptions);
   user.password = undefined;
   user.passwordConfirm = undefined;
-
+  
   res.status(statusCode).json({
     status: 'success',
     token,
@@ -119,7 +119,6 @@ export const verifySignupOTP = catchAsync(async (req, res, next) => {
     process.env.TWILIO_AUTH_TOKEN
   );
 
-  // 🛠 Ensure verificationChecks is correctly spelled
   let check;
   try {
     check = await client.verify.v2
@@ -138,23 +137,32 @@ export const verifySignupOTP = catchAsync(async (req, res, next) => {
   // Find user by phone
   let user = await User.findOne({ phone: normalizedPhone });
 
-   
+  const defaultProfilePicture =
+    'https://res.cloudinary.com/drinuph9d/image/upload/v1752830842/800px-User_icon_2.svg_vi5e9d.png';
+
   if (user) {
     user.active = true;
     user.isPhoneVerified = true;
+
+    // Set default profile picture only if not already set
+    if (!user.profilePicture) {
+      user.profilePicture = defaultProfilePicture;
+    }
+
     await user.save({ validateBeforeSave: false });
     return createSendToken(user, 200, res);
   }
 
-  // No user exists → create one with default role
+  // No user exists → create one with default role and profile picture
   user = await User.create({
     phone: normalizedPhone,
     password: normalizedPhone,
     passwordConfirm: normalizedPhone,
     isPhoneVerified: true,
     role: 'Customer',
+    profilePicture: defaultProfilePicture
   });
- 
+
   createSendToken(user, 201, res);
 });
 
@@ -275,10 +283,6 @@ export const resetPasswordWithOTP = catchAsync(async (req, res, next) => {
 export const updatePassword = catchAsync(async (req, res, next) => {
   const user = await User.findById(req.user.id).select('+password');
 
-
-  if (user.firstLogin== !(await user.correctPassword(req.body.passwordCurrent, user.password))) {
-    return next(new AppError('Current password is incorrect', 401));
-  }
 
   user.password = req.body.password;
   user.passwordConfirm = req.body.passwordConfirm;
