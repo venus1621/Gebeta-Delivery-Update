@@ -7,7 +7,7 @@ import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
 
 // 📞 Normalize Ethiopian phone number
-const normalizePhone = (phone) => {
+export const normalizePhone = (phone) => {
   const digits = phone.replace(/\D/g, '');
   if (digits.length === 9) return `+251${digits}`;
   if (digits.length === 12 && digits.startsWith('251')) return `+${digits}`;
@@ -138,6 +138,7 @@ export const verifySignupOTP = catchAsync(async (req, res, next) => {
   // Find user by phone
   let user = await User.findOne({ phone: normalizedPhone });
 
+   
   if (user) {
     user.active = true;
     user.isPhoneVerified = true;
@@ -153,7 +154,7 @@ export const verifySignupOTP = catchAsync(async (req, res, next) => {
     isPhoneVerified: true,
     role: 'Customer',
   });
-
+ 
   createSendToken(user, 201, res);
 });
 
@@ -161,21 +162,45 @@ export const verifySignupOTP = catchAsync(async (req, res, next) => {
 // 🔑 5. Login
 export const login = catchAsync(async (req, res, next) => {
   let { phone, password } = req.body;
-  if (!phone || !password) return next(new AppError('Phone and password required', 400));
+  if (!phone || !password)
+    return next(new AppError('Phone and password required', 400));
 
   phone = normalizePhone(phone);
+
   const user = await User.findOne({ phone }).select('+password');
 
-  if (!user || !(await user.correctPassword(password, user.password))) {
+  if (!user)
+    return next(new AppError('No user found with that phone number', 404));
+
+  const isCorrect = await user.correctPassword(password, user.password);
+  if (!isCorrect)
     return next(new AppError('Invalid credentials', 401));
-  }
 
+  // Step 1: If the phone is not verified, send OTP
   if (!user.isPhoneVerified) {
-    return next(new AppError('Phone not verified', 403));
+    const client = twilio(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN
+    );
+
+    await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_ID)
+      .verifications.create({ to: phone, channel: 'sms' });
+
+    return res.status(200).json({
+      status: 'pending',
+      message: 'Phone not verified. OTP sent to your phone.',
+      phone: user.phone
+    });
   }
 
+  
+
+  // Step 3: Phone is verified and password is not default → normal login
   createSendToken(user, 200, res);
 });
+
+
 
 // 🛡️ 6. Protect Route Middleware
 export const protect = catchAsync(async (req, res, next) => {
@@ -250,7 +275,8 @@ export const resetPasswordWithOTP = catchAsync(async (req, res, next) => {
 export const updatePassword = catchAsync(async (req, res, next) => {
   const user = await User.findById(req.user.id).select('+password');
 
-  if (!(await user.correctPassword(req.body.passwordCurrent, user.password))) {
+
+  if (user.firstLogin== !(await user.correctPassword(req.body.passwordCurrent, user.password))) {
     return next(new AppError('Current password is incorrect', 401));
   }
 

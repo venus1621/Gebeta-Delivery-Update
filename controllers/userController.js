@@ -4,6 +4,7 @@ import AppError from '../utils/appError.js';
 import cloudinary from '../utils/cloudinary.js';
 import streamifier from 'streamifier';
 import multer from 'multer';
+import { normalizePhone } from './authController.js';
 // Utility to filter only allowed fields from request body
 const filterObj = (obj, ...allowedFields) => {
   const newObj = {};
@@ -95,14 +96,29 @@ export const getUser = catchAsync(async (req, res, next) => {
 });
 
 // POST /api/v1/users
+
 export const createUser = catchAsync(async (req, res, next) => {
-  const newUser = await User.create(req.body);
+  const { phone } = req.body;
+  if (!phone) return next(new AppError('Phone number is required', 400));
+
+  const normalizedPhone = normalizePhone(phone);
+
+  const newUser = await User.create({
+    ...req.body,
+    phone: normalizedPhone,
+    password: normalizedPhone,
+    passwordConfirm: normalizedPhone,
+    isPhoneVerified: false,
+    role: req.body.role || 'Customer'
+  });
 
   res.status(201).json({
     status: 'success',
+    message: 'User created successfully. User must verify phone and change password after login.',
     data: { user: newUser }
   });
 });
+
 
 // PATCH /api/v1/users/:id
 export const updateUser = catchAsync(async (req, res, next) => {

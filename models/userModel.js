@@ -105,6 +105,10 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  },
+  {
+    firstLogin:Boolean,
+    default: false
   }
 );
 
