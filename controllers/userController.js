@@ -30,12 +30,17 @@ export const updateMe = catchAsync(async (req, res, next) => {
     return next(new AppError('This route is not for password updates.', 400));
   }
 
-  // Upload profile image to Cloudinary if provided
+  // Upload profile image to Cloudinary using user ID as public_id
   if (req.file) {
-    const uploadFromBuffer = (fileBuffer) => {
+    const uploadFromBuffer = (fileBuffer, publicId) => {
       return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
-          { folder: 'profile_pictures' },
+          {
+            folder: 'profile_pictures',
+            public_id: publicId,
+            overwrite: true,
+            resource_type: 'image'
+          },
           (error, result) => {
             if (error) return reject(error);
             resolve(result);
@@ -45,7 +50,8 @@ export const updateMe = catchAsync(async (req, res, next) => {
       });
     };
 
-    const result = await uploadFromBuffer(req.file.buffer);
+    const publicId = req.user.id.toString(); // ensure string type
+    const result = await uploadFromBuffer(req.file.buffer, publicId);
     req.body.profilePicture = result.secure_url;
   }
 
