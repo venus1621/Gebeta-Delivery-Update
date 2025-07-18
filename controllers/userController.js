@@ -60,7 +60,6 @@ export const updateMe = catchAsync(async (req, res, next) => {
     'firstName',
     'lastName',
     'email',
-    'phone',
     'profilePicture'
   );
 
@@ -185,6 +184,18 @@ export const addAddressToUser = catchAsync(async (req, res, next) => {
   res.status(201).json({
     status: 'success',
     message: 'Address added successfully',
+    addresses: user.addresses
+  });
+});
+
+export const getMyAddresses = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+
+  const user = await User.findById(userId).select('addresses');
+  if (!user) return next(new AppError('User not found', 404));
+
+  res.status(200).json({
+    status: 'success',
     addresses: user.addresses
   });
 });

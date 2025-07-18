@@ -20,7 +20,8 @@ import {
   deleteUser,
   updateMe,
   deleteMe,
-  addAddressToUser
+  addAddressToUser,
+  getMyAddresses
 } from '../controllers/userController.js';
 
 import upload from '../utils/upload.js';
@@ -70,6 +71,9 @@ router.delete('/deleteMe', deleteMe);
 
 // Add an address to current user
 router.post('/addAddress', addAddressToUser);
+
+
+router.get('/myAddresses', getMyAddresses); 
 
 // =======================
 // 🛡️ Admin-Only Routes
