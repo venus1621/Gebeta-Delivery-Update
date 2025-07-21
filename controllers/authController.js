@@ -224,7 +224,7 @@ export const protect = catchAsync(async (req, res, next) => {
   if (user.changedPasswordAfter(decoded.iat)) {
     return next(new AppError('Password changed recently. Please log in again.', 401));
   }
-
+  
   req.user = user;
   next();
 });

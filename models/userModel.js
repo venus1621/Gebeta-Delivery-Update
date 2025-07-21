@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
+import { type } from 'os';
 
 const userSchema = new mongoose.Schema(
   {
@@ -38,7 +39,11 @@ const userSchema = new mongoose.Schema(
         message: 'Please provide a valid email',
       },
     },
-    profilePicture: String,
+    profilePicture: {
+      type: String,
+      default:"https://res.cloudinary.com/drinuph9d/image/upload/v1752830842/800px-User_icon_2.svg_vi5e9d.png"
+    }
+    ,
 
     password: {
       type: String,

@@ -1,7 +1,7 @@
 import express from 'express';
 import morgan from 'morgan';
 import session from 'express-session';
-import transactionRoutes from './routes/transactionRoutes.js';
+// import transactionRoutes from './routes/transactionRoutes.js';
 
 import foodRoutes from "./routes/foodRoutes.js";
 import categoryRoutes from './routes/categoryRoutes.js';
@@ -41,7 +41,7 @@ app.use('/api/v1/food-categories', categoryRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
 app.use('/api/v1/food-menus', foodMenuRoutes);
 app.use('/api/v1/orders', orderRoutes);
-app.use('/api/v1/transactions', transactionRoutes);
+// app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/deliveries', deliverRoutes);
 app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/restaurants/:restaurantId/reviews', reviewRouter);
