@@ -8,7 +8,7 @@ const foodMenuSchema = new mongoose.Schema({
   },
   menuType: {
     type: String,
-    enum: ['Breakfast', 'Lunch', 'Dinner', 'Special', 'Seasonal','other'],
+    enum: ['Breakfast', 'Lunch', 'Dinner', 'Special', 'Seasonal','other','vegan'],
     default: 'other',
   },
   active: {

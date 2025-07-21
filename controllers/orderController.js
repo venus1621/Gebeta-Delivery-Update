@@ -111,4 +111,28 @@ export const updateOrderStatus = async (req, res, next) => {
     next(error);
   }
 };
+export const getCurrentOrders = async (req, res) => {
+  try {
+    const userId = req.user.id;
 
+    const orders = await Order.find({
+      userId,
+      orderStatus: { $ne: 'Completed' }, // Not Completed
+    })
+      .populate('orderItems.foodId', 'name price') // Optional: populate food info
+      .populate('restaurant_id', 'name location') // Optional: populate restaurant info
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      status: 'success',
+      results: orders.length,
+      data: orders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch current orders',
+      error: error.message,
+    });
+  }
+};

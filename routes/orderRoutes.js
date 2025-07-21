@@ -8,4 +8,7 @@ router.post('/place-order', protect, placeOrder);
 router.get('/my-orders', protect, getMyOrders);
 router.patch('/:orderId/status', protect, updateOrderStatus);
 
+
+router.get('/current', protect, getCurrentOrders);
+
 export default router;
