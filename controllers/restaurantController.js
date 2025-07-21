@@ -75,7 +75,8 @@ export const getAllRestaurants = catchAsync(async (req, res, next) => {
     .searchBy('name')
     .filter()
     .sort()
-    .limitFields();
+    .limitFields()
+    .populate('managerId', 'name phone');
 
   const restaurants = await features.query;
 
