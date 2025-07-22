@@ -93,6 +93,54 @@ export const createDelivery = async (req, res, next) => {
     res.status(500).json({ message: 'Internal server error.' });
   }
 };
+export const assignDeliveryToOrder = async (req, res, next) => {
+  try {
+    const deliveryPersonId = req.user._id;
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ message: 'Order ID is required.' });
+    }
+
+    // 1. Check if order exists and not already assigned
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+
+    if (order.deliveryId) {
+      return res.status(409).json({ message: 'Delivery already assigned to this order.' });
+    }
+
+    // 2. Create delivery assignment
+    const delivery = await Deliver.create({
+      deliveryPerson: deliveryPersonId,
+      orderId,
+      deliveryStatus: 'Assigned',
+    });
+
+    // 3. Update the order without triggering full validation
+    await Order.findByIdAndUpdate(
+      orderId,
+      {
+        deliveryId: delivery._id,
+        orderStatus: 'Delivering',
+      },
+      {
+        new: true,
+        runValidators: false, // avoid requiring other fields
+      }
+    );
+
+    res.status(201).json({
+      message: 'Delivery person assigned successfully.',
+      delivery,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getAllDeliveries = async (req, res) => {
   try {
     const deliveries = await Deliver.find()

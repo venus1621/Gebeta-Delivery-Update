@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   createDelivery,
+  assignDeliveryToOrder,
   getAllDeliveries,
   getDelivery,
   updateDelivery,
@@ -10,7 +11,7 @@ import { protect, restrictTo } from '../controllers/authController.js';
 const router = express.Router();
 
 router.route('/')
-  .post(protect,createDelivery)
+  .post(protect,assignDeliveryToOrder)
   .get(getAllDeliveries);
 
 router.route('/:id')
