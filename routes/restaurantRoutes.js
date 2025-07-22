@@ -45,7 +45,7 @@ router
   .get(restaurantController.getRestaurant)
   .patch(
     protect,
-    restrictTo('manager', 'admin'),
+    restrictTo('Manager', 'Admin'),
     upload.single('image'),
     resizeRestaurantImage,
     restaurantController.updateRestaurant
