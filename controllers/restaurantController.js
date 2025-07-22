@@ -71,21 +71,26 @@ export const getRestaurantsWithDistanceFromCoords = catchAsync(async (req, res, 
 });
 // Get all restaurants with filtering, sorting, pagination & search
 export const getAllRestaurants = catchAsync(async (req, res, next) => {
+  // Create an instance of APIFeatures with the base query and request query
   const features = new APIFeatures(Restaurant.find(), req.query)
-    .searchBy('name')
     .filter()
     .sort()
     .limitFields()
-    .populate('managerId', 'name phone');
+    .paginate();
 
-  const restaurants = await features.query;
+  // Execute the query and populate the manager data
+  const restaurants = await features.query.populate('managerId');
 
+  // Send response
   res.status(200).json({
     status: 'success',
     results: restaurants.length,
-    data: { restaurants }
+    data: {
+      restaurants,
+    },
   });
 });
+
 
 // Get one restaurant by ID
 export const getRestaurant = catchAsync(async (req, res, next) => {
