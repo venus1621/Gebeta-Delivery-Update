@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-// 🔹 Define transaction sub-schema
+// 🔹 Transaction sub-schema
 const transactionSchema = new mongoose.Schema({
   Total_Price: { type: mongoose.Schema.Types.Decimal128, required: true },
   Status: {
@@ -11,7 +11,7 @@ const transactionSchema = new mongoose.Schema({
   Created_At: { type: Date, default: Date.now },
 });
 
-// 🔹 Define order schema
+// 🔹 Order schema
 const orderSchema = new mongoose.Schema(
   {
     userId: {
@@ -19,6 +19,7 @@ const orderSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+
     orderItems: [
       {
         foodId: {
@@ -29,24 +30,43 @@ const orderSchema = new mongoose.Schema(
         quantity: { type: Number, required: true, min: 1 },
       },
     ],
-    totalPrice: { type: Number, required: true },
+
+    // 🧾 Total prices breakdown
+    foodTotal: { type: Number, required: true },          // New: food total
+    deliveryFee: { type: Number, default: 0 },             // New: delivery fee
+    totalPrice: { type: Number, required: true },          // Grand total = food + delivery
+
     typeOfOrder: {
       type: String,
       enum: ['Delivery', 'Takeaway'],
       default: 'Delivery',
       required: true,
     },
-     restaurant_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Restaurant',
-    required: [true, 'restaurant_id is required']
-  },
+
+    restaurant_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Restaurant',
+      required: [true, 'restaurant_id is required'],
+    },
+
+    // 📍 Delivery address (if applicable)
+    location: {
+      lat: { type: Number },
+      lng: { type: Number },
+    },
+
     orderStatus: {
       type: String,
       enum: ['Pending', 'Preparing', 'Delivering', 'Completed', 'Cancelled'],
       default: 'Pending',
     },
-    // 🔹 Embedded transaction
+
+    // 🔗 Optional reference to Delivery document
+    deliveryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Deliver',
+    },
+
     transaction: {
       type: transactionSchema,
       required: true,

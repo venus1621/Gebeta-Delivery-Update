@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const deliverSchema = new mongoose.Schema(
   {
-    deliveryPersonId: {
+   deliveryPerson: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
@@ -12,28 +12,21 @@ const deliverSchema = new mongoose.Schema(
       ref: 'Order',
       required: true,
     },
-    deliveryPrice: {
-      type: Number,
-      default: 0,
-      min: [0, 'Delivery price cannot be negative'],
-    },
     rating: {
       type: Number,
       min: [1, 'Minimum rating is 1'],
       max: [5, 'Maximum rating is 5'],
-      default: 0,
+      default: 1,
     },
     feedback: {
       type: String,
       trim: true,
       maxlength: 1000,
     },
-    location: {
-      type: {
-        lat: { type: Number, required: true },
-        lng: { type: Number, required: true },
-      },
-      required: [true, "Location is required from user's selected address coordinates"],
+    deliveryStatus: {
+      type: String,
+      enum: ['Assigned','Pending', 'Completed', 'Cancelled'],
+      default: 'Pending',
     },
     createdAt: {
       type: Date,

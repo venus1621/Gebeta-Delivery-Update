@@ -6,11 +6,11 @@ import {
   updateDelivery,
   deleteDelivery
 } from '../controllers/deliverController.js';
-
+import { protect, restrictTo } from '../controllers/authController.js';
 const router = express.Router();
 
 router.route('/')
-  .post(createDelivery)
+  .post(protect,createDelivery)
   .get(getAllDeliveries);
 
 router.route('/:id')
