@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema(
   validate: {
     validator: function (v) {
       // Allow 9XXXXXXXX or +2519XXXXXXXX
-      return /^(\+2519\d{8}|9\d{8})$/.test(v);
+      return /^(\+251(7|9)\d{8}|9\d{8})$/.test(v);
     },
     message: props => `${props.value} is not a valid Ethiopian phone number`
   }
