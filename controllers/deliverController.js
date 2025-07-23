@@ -141,6 +141,54 @@ export const assignDeliveryToOrder = async (req, res, next) => {
   }
 };
 
+
+export const cancelDeliveryAssignment = async (req, res, next) => {
+  try {
+    const deliveryPersonId = req.user._id;
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({ message: 'Order ID is required.' });
+    }
+
+    // Find the delivery record assigned to this user and order
+    const delivery = await Deliver.findOne({ orderId, deliveryPerson: deliveryPersonId });
+
+    if (!delivery) {
+      return res.status(404).json({ message: 'No delivery assignment found for this order and user.' });
+    }
+
+    if (delivery.deliveryStatus === 'Cancelled') {
+      return res.status(400).json({ message: 'Delivery is already cancelled.' });
+    }
+
+    // Update delivery status to Cancelled
+    delivery.deliveryStatus = 'Cancelled';
+    await delivery.save();
+
+    // Update the order: remove deliveryId and revert status to 'Cooked' (or 'Pending' as you prefer)
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found.' });
+    }
+
+    order.deliveryId = null;
+    order.orderStatus = 'Cooked'; // revert back to cooked, waiting for another delivery assignment
+    await order.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Delivery assignment cancelled and order reverted.',
+      data: {
+        delivery,
+        order,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getAllDeliveries = async (req, res) => {
   try {
     const deliveries = await Deliver.find()
