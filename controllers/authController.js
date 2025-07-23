@@ -86,7 +86,7 @@ export const signup = catchAsync(async (req, res, next) => {
 
   const normalizedPhone = normalizePhone(phone);
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-
+  console.log(normalizePhone);
   await client.verify.v2.services(process.env.TWILIO_VERIFY_SERVICE_ID)
     .verifications.create({ to: normalizedPhone, channel: 'sms' });
 
