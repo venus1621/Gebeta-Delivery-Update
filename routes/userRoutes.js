@@ -33,7 +33,7 @@ const router = express.Router();
 // =======================
 
 // Signup with OTP
-router.post('/signup', signup);
+router.post('/signup',signup);
 
 // Login with phone & password
 router.post('/login', login);

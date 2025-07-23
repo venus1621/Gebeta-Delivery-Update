@@ -42,10 +42,8 @@ const createSendToken = (user, statusCode, res) => {
 // 📤 1. Send OTP
 export const sendOTP = catchAsync(async (req, res, next) => {
   const { phone } = req.body;
-  if (!phone || !/^9\d{8}$/.test(phone)) {
-    return next(new AppError('Phone must be 9 digits starting with 9', 400));
-  }
-
+  
+phone = normalizePhone(phone);
   const fullPhone = `+251${phone}`;
   const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
@@ -80,19 +78,25 @@ export const verifyOTP = catchAsync(async (req, res, next) => {
 });
 
 // 📝 3. Signup (Send OTP)
+// ✅ 1. Signup - Send OTP
 export const signup = catchAsync(async (req, res, next) => {
   const { phone } = req.body;
-  if (!phone) return next(new AppError('Phone is required', 400));
+  if (!phone) return next(new AppError('Phone number is required.', 400));
 
   const normalizedPhone = normalizePhone(phone);
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  console.log(normalizePhone);
+
+  const client = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+  );
+  console.log('Sending OTP to:', normalizedPhone);
   await client.verify.v2.services(process.env.TWILIO_VERIFY_SERVICE_ID)
     .verifications.create({ to: normalizedPhone, channel: 'sms' });
 
   res.status(200).json({
-    status: 'success',
+    status: 'pending',
     message: `OTP sent to ${normalizedPhone}`,
+    phone: normalizedPhone
   });
 });
 
