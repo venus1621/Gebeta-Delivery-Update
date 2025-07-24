@@ -146,7 +146,6 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     openHours,
     isDeliveryAvailable,
     isOpenNow,
-    location
   } = req.body;
 
   // Validate manager
@@ -160,24 +159,24 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
   }
 
   // Handle location
-  if (!location || !location.address || !location.coordinates) {
-    return next(new AppError('Location with address and coordinates is required.', 400));
-  }
+  // if (!location || !location.address || !location.coordinates) {
+  //   return next(new AppError('Location with address and coordinates is required.', 400));
+  // }
 
-  const coordinates = Array.isArray(location.coordinates)
-    ? location.coordinates.map(coord => parseFloat(coord))
-    : [NaN, NaN];
+  // const coordinates = Array.isArray(location.coordinates)
+  //   ? location.coordinates.map(coord => parseFloat(coord))
+  //   : [NaN, NaN];
 
-  if (coordinates.length !== 2 || coordinates.some(isNaN)) {
-    return next(new AppError('Coordinates must be valid [longitude, latitude] numbers.', 400));
-  }
+  // if (coordinates.length !== 2 || coordinates.some(isNaN)) {
+  //   return next(new AppError('Coordinates must be valid [longitude, latitude] numbers.', 400));
+  // }
 
-  const parsedLocation = {
-    type: 'Point',
-    coordinates,
-    address: location.address,
-    description: location.description || ''
-  };
+  // const parsedLocation = {
+  //   type: 'Point',
+  //   coordinates,
+  //   address: location.address,
+  //   description: location.description || ''
+  // };
 
   // Create the restaurant
   const newRestaurant = await Restaurant.create({
@@ -189,7 +188,7 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     isDeliveryAvailable,
     isOpenNow,
     managerId: manager,
-    location: parsedLocation
+    // location: parsedLocation
   });
 
   res.status(201).json({
