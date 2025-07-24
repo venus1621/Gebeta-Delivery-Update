@@ -140,76 +140,56 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
   const {
     name,
     license,
-    manager, // managerId sent as `manager` in form-data
-    'location.type': locationType,
-    'location.coordinates[0]': lng,
-    'location.coordinates[1]': lat,
-    'location.address': address,
-    'location.description': description,
-    'cuisineTypes[]': cuisineTypes,
+    manager, // sent from client
+    cuisineTypes,
     deliveryRadiusMeters,
     openHours,
     isDeliveryAvailable,
-    isOpenNow
+    isOpenNow,
+    location
   } = req.body;
 
-  // 1. Validate manager ID
+  // Validate manager
   if (!manager) {
     return next(new AppError('A manager ID must be provided to create a restaurant.', 400));
   }
 
   const managerUser = await User.findById(manager);
-  if (!managerUser) {
-    return next(new AppError('Manager ID does not exist.', 400));
+  if (!managerUser || (managerUser.role !== 'Manager' && managerUser.role !== 'Admin')) {
+    return next(new AppError('Only a Manager or Admin can manage a restaurant.', 403));
   }
 
-  if (managerUser.role !== 'Manager' && managerUser.role !== 'Admin') {
-    return next(new AppError('Only users with the role "Manager" or "Admin" can manage a restaurant.', 403));
+  // Handle location
+  if (!location || !location.address || !location.coordinates) {
+    return next(new AppError('Location with address and coordinates is required.', 400));
   }
-// Convert location.coordinates if needed
-const coordinates =
-  location && Array.isArray(location.coordinates)
-    ? [parseFloat(location.coordinates[0]), parseFloat(location.coordinates[1])]
-    : [0, 0]; // fallback to avoid NaN
 
-// Validate coordinates
-if (coordinates.some(isNaN)) {
-  return next(new AppError('Coordinates must be valid numbers.', 400));
-}
+  const coordinates = Array.isArray(location.coordinates)
+    ? location.coordinates.map(coord => parseFloat(coord))
+    : [NaN, NaN];
 
- // Build location object manually
-const parsedLocation = {
-  type: location?.type || 'Point',
-  coordinates,
-  address: location?.address,
-  description: location?.description
-};
-// Ensure address exists
-if (!parsedLocation.address) {
-  return next(new AppError('Location address is required.', 400));
-}
-  // 3. Handle cuisineTypes (may be single string or array)
-  const parsedCuisineTypes = Array.isArray(cuisineTypes)
-    ? cuisineTypes
-    : cuisineTypes
-    ? [cuisineTypes]
-    : [];
+  if (coordinates.length !== 2 || coordinates.some(isNaN)) {
+    return next(new AppError('Coordinates must be valid [longitude, latitude] numbers.', 400));
+  }
 
-  // 4. Handle image upload
-  const imageCover = req.file ? req.file.filename : 'default-restaurant.jpg';
+  const parsedLocation = {
+    type: 'Point',
+    coordinates,
+    address: location.address,
+    description: location.description || ''
+  };
 
-  // 5. Create restaurant
+  // Create the restaurant
   const newRestaurant = await Restaurant.create({
     name,
     license,
-    managerId: manager,
-    location,
-    cuisineTypes: parsedCuisineTypes,
+    cuisineTypes,
     deliveryRadiusMeters,
     openHours,
     isDeliveryAvailable,
     isOpenNow,
-    imageCover
+    managerId: manager,
+    location: parsedLocation
   });
 
   res.status(201).json({
