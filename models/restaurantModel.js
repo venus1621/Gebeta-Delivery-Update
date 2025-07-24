@@ -13,29 +13,35 @@ const restaurantSchema = new mongoose.Schema(
     },
     slug: String,
     location: {
-      type: {
-        type: String,
-        enum: ['Point'],
-        default: 'Point',
-        required: true
+  type: {
+    type: String,
+    enum: ['Point'],
+    default: 'Point',
+    required: true
+  },
+  coordinates: {
+    type: [Number],
+    required: true,
+    default: [0, 0], // Longitude, Latitude (International default)
+    validate: {
+      validator: function (val) {
+        return val.length === 2;
       },
-      coordinates: {
-        type: [Number],
-        required: true,
-        validate: {
-          validator: function (val) {
-            return val.length === 2;
-          },
-          message: 'Coordinates must be [longitude, latitude]'
-        }
-      },
-      address: {
-        type: String,
-        required: true,
-        trim: true
-      },
-      description: String
-    },
+      message: 'Coordinates must be [longitude, latitude]'
+    }
+  },
+  address: {
+    type: String,
+    required: true,
+    trim: true,
+    default: 'International Default Location'
+  },
+  description: {
+    type: String,
+    default: 'Default global coordinates (0°, 0°)'
+  }
+}
+
     deliveryRadiusMeters: {
       type: Number,
       default: 3000,
