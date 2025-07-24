@@ -169,11 +169,15 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
 
   // 2. Build location object
   const location = {
-    type: locationType || 'Point',
-    coordinates: [parseFloat(lng), parseFloat(lat)],
-    address,
-    description
-  };
+  type: locationType || 'Point',
+  coordinates: [
+    parseFloat(req.body['location.coordinates[0]']),
+    parseFloat(req.body['location.coordinates[1]'])
+  ],
+  address: req.body['location.address'],
+  description: req.body['location.description']
+};
+
 
   // 3. Handle cuisineTypes (may be single string or array)
   const parsedCuisineTypes = Array.isArray(cuisineTypes)
