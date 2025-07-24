@@ -13,35 +13,34 @@ const restaurantSchema = new mongoose.Schema(
     },
     slug: String,
     location: {
-  type: {
-    type: String,
-    enum: ['Point'],
-    default: 'Point',
-    required: true
-  },
-  coordinates: {
-    type: [Number],
-    required: true,
-    default: [0, 0], // Longitude, Latitude (International default)
-    validate: {
-      validator: function (val) {
-        return val.length === 2;
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+        required: true
       },
-      message: 'Coordinates must be [longitude, latitude]'
-    }
-  },
-  address: {
-    type: String,
-    required: true,
-    trim: true,
-    default: 'International Default Location'
-  },
-  description: {
-    type: String,
-    default: 'Default global coordinates (0°, 0°)'
-  }
-}
-
+      coordinates: {
+        type: [Number],
+        required: true,
+        default: [0, 0], // International default: [longitude, latitude]
+        validate: {
+          validator: function (val) {
+            return val.length === 2;
+          },
+          message: 'Coordinates must be [longitude, latitude]'
+        }
+      },
+      address: {
+        type: String,
+        required: true,
+        trim: true,
+        default: 'International Default Location'
+      },
+      description: {
+        type: String,
+        default: 'Default global coordinates (0°, 0°)'
+      }
+    }, // ← ✅ Missing comma was here
     deliveryRadiusMeters: {
       type: Number,
       default: 3000,
@@ -68,8 +67,7 @@ const restaurantSchema = new mongoose.Schema(
     cuisineTypes: {
       type: [String],
       enum: {
-        values: ['Ethiopian', 'Italian', 'Chinese', 'Indian', 'Fast Food', 'Vegan','Other'
-        ],
+        values: ['Ethiopian', 'Italian', 'Chinese', 'Indian', 'Fast Food', 'Vegan', 'Other'],
         message: 'Not a supported cuisine'
       },
       default: []
@@ -99,7 +97,7 @@ const restaurantSchema = new mongoose.Schema(
     },
     isOpenNow: {
       type: Boolean,
-      default: true // ❗ must be updated via controller or scheduler logic
+      default: true // ❗ should be updated dynamically
     },
     active: {
       type: Boolean,
@@ -113,13 +111,13 @@ const restaurantSchema = new mongoose.Schema(
   }
 );
 
-// Generate slug on save
+// SLUG on Save
 restaurantSchema.pre('save', function (next) {
   this.slug = slugify(this.name, { lower: true });
   next();
 });
 
-// Generate slug on name update
+// SLUG on Update
 restaurantSchema.pre('findOneAndUpdate', function (next) {
   const update = this.getUpdate();
   if (update.name) {
@@ -129,27 +127,25 @@ restaurantSchema.pre('findOneAndUpdate', function (next) {
   next();
 });
 
-// Exclude inactive restaurants from queries
+// Exclude inactive
 restaurantSchema.pre(/^find/, function (next) {
   this.find({ active: { $ne: false } });
   next();
 });
 
-// Virtual populate for reviews
+// Virtual Populate
 restaurantSchema.virtual('reviews', {
   ref: 'Review',
   foreignField: 'restaurant',
   localField: '_id'
 });
 
-// Virtual short description
 restaurantSchema.virtual('shortDescription').get(function () {
   return this.location.description?.length > 50
     ? this.location.description.substring(0, 50) + '...'
     : this.location.description;
 });
 
-// Virtual count of reviews
 restaurantSchema.virtual('reviewCount').get(function () {
   return this.reviews?.length || 0;
 });
