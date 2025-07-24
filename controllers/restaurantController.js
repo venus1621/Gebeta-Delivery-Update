@@ -166,19 +166,28 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
   if (managerUser.role !== 'Manager' && managerUser.role !== 'Admin') {
     return next(new AppError('Only users with the role "Manager" or "Admin" can manage a restaurant.', 403));
   }
+// Convert location.coordinates if needed
+const coordinates =
+  location && Array.isArray(location.coordinates)
+    ? [parseFloat(location.coordinates[0]), parseFloat(location.coordinates[1])]
+    : [0, 0]; // fallback to avoid NaN
 
-  // 2. Build location object
-  const location = {
-  type: locationType || 'Point',
-  coordinates: [
-    parseFloat(req.body['location.coordinates[0]']),
-    parseFloat(req.body['location.coordinates[1]'])
-  ],
-  address: req.body['location.address'],
-  description: req.body['location.description']
+// Validate coordinates
+if (coordinates.some(isNaN)) {
+  return next(new AppError('Coordinates must be valid numbers.', 400));
+}
+
+ // Build location object manually
+const parsedLocation = {
+  type: location?.type || 'Point',
+  coordinates,
+  address: location?.address,
+  description: location?.description
 };
-
-
+// Ensure address exists
+if (!parsedLocation.address) {
+  return next(new AppError('Location address is required.', 400));
+}
   // 3. Handle cuisineTypes (may be single string or array)
   const parsedCuisineTypes = Array.isArray(cuisineTypes)
     ? cuisineTypes
