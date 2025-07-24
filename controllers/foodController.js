@@ -19,6 +19,29 @@ const uploadFromBuffer = (fileBuffer, folder = 'food_images') => {
   });
 };
 
+
+export const getFoodsByMenuId = catchAsync(async (req, res, next) => {
+  const { menuId } = req.params;
+
+  if (!menuId) {
+    return next(new AppError('Menu ID is required.', 400));
+  }
+
+  const foods = await Food.find({ menuId }).populate('categoryId', 'categoryName');
+
+  if (!foods.length) {
+    return next(new AppError('No foods found for the given menu ID.', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    results: foods.length,
+    data: {
+      foods
+    }
+  });
+});
+
 // Middleware: attach image URL to req.body.image
 export const uploadFoodImageToCloudinary = catchAsync(async (req, res, next) => {
   if (!req.file) return next();
