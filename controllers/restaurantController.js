@@ -146,6 +146,7 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     openHours,
     isDeliveryAvailable,
     isOpenNow,
+    description,
   } = req.body;
 
   // Validate manager
@@ -188,6 +189,7 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     isDeliveryAvailable,
     isOpenNow,
     managerId: manager,
+    description
     // location: parsedLocation
   });
 
