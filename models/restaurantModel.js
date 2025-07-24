@@ -74,7 +74,7 @@ const restaurantSchema = new mongoose.Schema(
     },
     imageCover: {
       type: String,
-      default: 'default-restaurant.jpg'
+      default: 'https://console.cloudinary.com/app/c-e6424795bfdb4b35ccc8c9b7873ed2/assets/media_library/folders/cc1e40b24e89281c5e115867dd9f8dc9b6/asset/ddebcb0913050e88cdb318d47375deb4/manage/summary?view_mode=mosaic&context=manage'
     },
     ratingAverage: {
       type: Number,
