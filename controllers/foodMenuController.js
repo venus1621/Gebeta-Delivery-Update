@@ -33,8 +33,8 @@ export const createMenu = catchAsync(async (req, res, next) => {
 
 // GET all menus (with filters)
 export const getAllMenus = catchAsync(async (req, res, next) => {
-  const queryObj = {};
 
+  const queryObj = {};
   if (req.query.restaurantId) queryObj.restaurantId = req.query.restaurantId;
   if (req.query.menuType) queryObj.menuType = req.query.menuType;
   if (req.query.active) queryObj.active = req.query.active === 'true';
@@ -51,6 +51,7 @@ export const getAllMenus = catchAsync(async (req, res, next) => {
 // GET single menu
 // GET single menu
 export const getMenu = catchAsync(async (req, res, next) => {
+
   const menu = await FoodMenu.findById(req.params.id);
   if (!menu) {
     return next(new AppError('Menu not found', 404));

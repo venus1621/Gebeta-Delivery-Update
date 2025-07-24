@@ -39,6 +39,7 @@ router
     restaurantController.createRestaurant
   );
   router.get('/distance-from-coords', restaurantController.getRestaurantsWithDistanceFromCoords);
+router.get('/by-manager/:managerId',protect,restrictTo('Manager','Admin') ,restaurantController.getRestaurantsByManagerId);
 
 router
   .route('/:id')

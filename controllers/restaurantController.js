@@ -230,7 +230,27 @@ export const deleteRestaurant = catchAsync(async (req, res, next) => {
     data: null
   });
 });
+export const getRestaurantsByManagerId = catchAsync(async (req, res, next) => {
+  const { managerId } = req.params;
 
+  if (!managerId) {
+    return next(new AppError('Manager ID is required.', 400));
+  }
+
+  const restaurants = await Restaurant.find({ managerId });
+
+  if (!restaurants.length) {
+    return next(new AppError('No restaurants found for the given manager ID.', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    results: restaurants.length,
+    data: {
+      restaurants
+    }
+  });
+});
 // Get restaurants nearby within a radius (meters)
 export const getNearbyRestaurants = catchAsync(async (req, res, next) => {
   const { lat, lng, distance } = req.query;
