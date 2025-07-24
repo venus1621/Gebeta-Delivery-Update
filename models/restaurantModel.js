@@ -35,12 +35,12 @@ const restaurantSchema = new mongoose.Schema(
         required: true,
         trim: true,
         default: 'International Default Location'
-      },
+      }
+    },
       description: {
         type: String,
-        default: 'Default global coordinates (0°, 0°)'
-      }
-    }, // ← ✅ Missing comma was here
+        default: 'New Restaurant'
+      },// ← ✅ Missing comma was here
     deliveryRadiusMeters: {
       type: Number,
       default: 3000,
