@@ -33,7 +33,7 @@ router
   .get(restaurantController.getAllRestaurants)
   .post(
     protect,
-    restrictTo('manager', 'admin'),
+    restrictTo('Manager', 'Admin'),
     upload.single('image'),
     resizeRestaurantImage,
     restaurantController.createRestaurant
