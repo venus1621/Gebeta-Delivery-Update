@@ -60,7 +60,6 @@ const orderSchema = new mongoose.Schema(
       enum: ['Pending', 'Preparing','Cooked', 'Delivering', 'Completed', 'Cancelled'],
       default: 'Pending',
     },
-
     // 🔗 Optional reference to Delivery document
     deliveryId: {
       type: mongoose.Schema.Types.ObjectId,
