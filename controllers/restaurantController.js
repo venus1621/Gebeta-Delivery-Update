@@ -107,8 +107,51 @@ export const getRestaurant = catchAsync(async (req, res, next) => {
 });
 
 // Create new restaurant
+// export const createRestaurant = catchAsync(async (req, res, next) => {
+//   const { manager } = req.body;
+
+//   // 1. Validate manager ID
+//   if (!manager) {
+//     return next(new AppError('A manager ID must be provided to create a restaurant.', 400));
+//   }
+
+//   const managerUser = await User.findById(manager);
+//   if (!managerUser) {
+//     return next(new AppError('Manager ID does not exist.', 400));
+//   }
+
+//   // Optional: Check role of manager
+//   if (managerUser.role !== 'Manager' && managerUser.role !== 'Admin') {
+//     return next(new AppError('Only users with the role "Manager" or "Admin" can manage a restaurant.', 403));
+//   }
+
+//   // 2. Create the restaurant
+//   const newRestaurant = await Restaurant.create(req.body);
+
+//   res.status(201).json({
+//     status: 'success',
+//     data: {
+//       restaurant: newRestaurant
+//     }
+//   });
+// });
+
 export const createRestaurant = catchAsync(async (req, res, next) => {
-  const { manager } = req.body;
+  const {
+    name,
+    license,
+    manager, // managerId sent as `manager` in form-data
+    'location.type': locationType,
+    'location.coordinates[0]': lng,
+    'location.coordinates[1]': lat,
+    'location.address': address,
+    'location.description': description,
+    'cuisineTypes[]': cuisineTypes,
+    deliveryRadiusMeters,
+    openHours,
+    isDeliveryAvailable,
+    isOpenNow
+  } = req.body;
 
   // 1. Validate manager ID
   if (!manager) {
@@ -120,13 +163,41 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     return next(new AppError('Manager ID does not exist.', 400));
   }
 
-  // Optional: Check role of manager
   if (managerUser.role !== 'Manager' && managerUser.role !== 'Admin') {
     return next(new AppError('Only users with the role "Manager" or "Admin" can manage a restaurant.', 403));
   }
 
-  // 2. Create the restaurant
-  const newRestaurant = await Restaurant.create(req.body);
+  // 2. Build location object
+  const location = {
+    type: locationType || 'Point',
+    coordinates: [parseFloat(lng), parseFloat(lat)],
+    address,
+    description
+  };
+
+  // 3. Handle cuisineTypes (may be single string or array)
+  const parsedCuisineTypes = Array.isArray(cuisineTypes)
+    ? cuisineTypes
+    : cuisineTypes
+    ? [cuisineTypes]
+    : [];
+
+  // 4. Handle image upload
+  const imageCover = req.file ? req.file.filename : 'default-restaurant.jpg';
+
+  // 5. Create restaurant
+  const newRestaurant = await Restaurant.create({
+    name,
+    license,
+    managerId: manager,
+    location,
+    cuisineTypes: parsedCuisineTypes,
+    deliveryRadiusMeters,
+    openHours,
+    isDeliveryAvailable,
+    isOpenNow,
+    imageCover
+  });
 
   res.status(201).json({
     status: 'success',
@@ -135,7 +206,6 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     }
   });
 });
-
 // Update restaurant by ID
 export const updateRestaurant = catchAsync(async (req, res, next) => {
   const restaurant = await Restaurant.findByIdAndUpdate(req.params.id, req.body, {
