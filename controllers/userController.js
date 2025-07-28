@@ -199,3 +199,41 @@ export const getMyAddresses = catchAsync(async (req, res, next) => {
     addresses: user.addresses
   });
 });
+
+// PATCH /api/v1/users/:id/updateLocation
+export const updateUserLocation = catchAsync(async (req, res, next) => {
+  const { lat, lng } = req.body;
+
+  if (!lat || !lng) {
+    return next(new AppError('Latitude and longitude are required', 400));
+  }
+
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+
+  // Optional: You can update the default address, or push a new one.
+  let defaultAddress = user.addresses.find(addr => addr.isDefault);
+
+  if (defaultAddress) {
+    defaultAddress.coordinates = { lat, lng };
+  } else {
+    user.addresses.push({
+      label: 'Home',
+      coordinates: { lat, lng },
+      isDefault: true
+    });
+  }
+
+  await user.save({ validateBeforeSave: false });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'User location updated successfully',
+    data: {
+      coordinates: { lat, lng },
+      addresses: user.addresses
+    }
+  });
+});
