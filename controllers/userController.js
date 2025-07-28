@@ -250,7 +250,7 @@ export const getUserLocation = async (req, res) => {
 
     res.status(200).json({
       status: 'success',
-      location: user.location,
+      location: user.coordinates,
     });
   } catch (error) {
     console.error('Error fetching user location:', error);
