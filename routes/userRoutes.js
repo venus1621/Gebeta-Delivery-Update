@@ -22,7 +22,8 @@ import {
   deleteMe,
   addAddressToUser,
   getMyAddresses,
-  updateUserLocation
+  updateUserLocation,
+  getUserLocation
 } from '../controllers/userController.js';
 
 import upload from '../utils/upload.js';
@@ -62,6 +63,7 @@ router.post('/resetPasswordOTP', resetPasswordWithOTP);
 router.use(protect);
 
 router.patch('/:id/updateLocation', updateUserLocation);
+router.get('/:id/location',  getUserLocation);
 // Update current user's password
 router.patch('/updateMyPassword', updatePassword);
 

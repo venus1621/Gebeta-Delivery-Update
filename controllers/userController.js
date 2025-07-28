@@ -237,3 +237,23 @@ export const updateUserLocation = catchAsync(async (req, res, next) => {
     }
   });
 });
+
+export const getUserLocation = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId).select('location');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      location: user.location,
+    });
+  } catch (error) {
+    console.error('Error fetching user location:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
