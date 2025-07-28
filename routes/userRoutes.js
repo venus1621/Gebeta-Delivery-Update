@@ -21,7 +21,8 @@ import {
   updateMe,
   deleteMe,
   addAddressToUser,
-  getMyAddresses
+  getMyAddresses,
+  updateUserLocation
 } from '../controllers/userController.js';
 
 import upload from '../utils/upload.js';
@@ -60,6 +61,7 @@ router.post('/resetPasswordOTP', resetPasswordWithOTP);
 // Apply protect middleware to all routes below
 router.use(protect);
 
+router.patch('/:id/updateLocation', updateUserLocation);
 // Update current user's password
 router.patch('/updateMyPassword', updatePassword);
 

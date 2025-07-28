@@ -4,13 +4,13 @@ import {
   updateTransactionStatus,
   getTransaction,
   getAllTransactions,
-  updateUserLocation
+
 } from '../controllers/transactionController.js';
 import { protect } from '../controllers/authController.js';
 
 const router = express.Router();
 // Admin or authorized user updates another user's location
-router.patch('/:id/updateLocation',protect, updateUserLocation);
+
 router.post('/', protect, createTransaction);
 router.patch('/:transactionId/status', protect, updateTransactionStatus);
 router.get('/:transactionId', protect, getTransaction);
