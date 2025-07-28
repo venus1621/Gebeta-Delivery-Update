@@ -89,7 +89,11 @@ const userSchema = new mongoose.Schema(
       enum: ['Customer', 'Manager', 'Delivery_Person', 'Admin'],
       default: 'Customer',
     },
-
+    location: {
+      latitude: { type: Number },
+      longitude: { type: Number },
+      updatedAt: { type: Date },
+    },
     isPhoneVerified: {
       type: Boolean,
       default: false,
