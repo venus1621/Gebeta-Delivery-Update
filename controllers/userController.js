@@ -214,17 +214,13 @@ export const updateUserLocation = catchAsync(async (req, res, next) => {
   }
 
   // Optional: You can update the default address, or push a new one.
-  let defaultAddress = user.addresses.find(addr => addr.isDefault);
-
-  if (defaultAddress) {
-    defaultAddress.coordinates = { lat, lng };
-  } else {
-    user.addresses.push({
-      label: 'Home',
-      coordinates: { lat, lng },
-      isDefault: true
-    });
-  }
+  
+  
+    user.location = {
+      latitude: lat,
+      longitude: lng,
+      updatedAt: new Date()
+    };
 
   await user.save({ validateBeforeSave: false });
 
@@ -232,8 +228,8 @@ export const updateUserLocation = catchAsync(async (req, res, next) => {
     status: 'success',
     message: 'User location updated successfully',
     data: {
-      coordinates: { lat, lng },
-      addresses: user.addresses
+      id: user._id,
+      location:user.location
     }
   });
 });
@@ -250,7 +246,7 @@ export const getUserLocation = async (req, res) => {
 
     res.status(200).json({
       status: 'success',
-      location: user.coordinates,
+      location: user,
     });
   } catch (error) {
     console.error('Error fetching user location:', error);
