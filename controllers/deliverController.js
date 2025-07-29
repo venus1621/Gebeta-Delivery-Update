@@ -191,9 +191,9 @@ export const cancelDeliveryAssignment = async (req, res, next) => {
 
 export const getAllDeliveries = async (req, res) => {
   try {
-    const deliveries = await Deliver.find()
-      .populate('deliveryPersonId')
-      .populate('cartId');
+    const deliveries = await Deliver.find();
+      // .populate('deliveryPersonId')
+      // .populate('cartId');
 
     res.status(200).json({
       status: 'success',

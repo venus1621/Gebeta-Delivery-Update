@@ -215,3 +215,31 @@ export const updateOrderStatus = async (req, res) => {
     res.status(500).json({ status: 'error', message: err.message });
   }
 };
+
+export const getCookedOrders = async (req, res, next) => {
+  try {
+    const cookedOrders = await Order.find({ orderStatus: 'Cooked' })
+      .populate('userId', 'phone') // only populate phone number
+      .populate('restaurant_id', 'name location') // only populate name and location
+      .sort({ updatedAt: -1 });
+
+    // Map the response to include only desired fields
+    const formattedOrders = cookedOrders.map(order => ({
+      userPhone: order.userId?.phone,
+      restaurant: {
+        name: order.restaurant_id?.name,
+        location: order.restaurant_id?.location
+      },
+      orderLocation: order.location
+    }));
+
+    res.status(200).json({
+      status: 'success',
+      results: formattedOrders.length,
+      data: formattedOrders
+    });
+  } catch (error) {
+    console.error('Error fetching cooked orders:', error.message);
+    res.status(500).json({ message: 'Server error retrieving cooked orders' });
+  }
+};
