@@ -108,10 +108,9 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
   }
 
   const orders = await Order.find({ restaurant_id: restaurantId })
-    .populate('userId', 'name email')
-    .populate('orderItems.foodId', 'title price imageCover')
-    .populate('restaurant_id', 'name')
-    .populate('deliveryId', 'name phone location')
+    .populate('userId', 'firstName lastName phone status')
+    .populate('orderItems.foodId', 'foodName price imageCover')
+    .populate('deliveryId', 'deliveryType ')
     .sort({ createdAt: -1 });
 
   if (!orders || orders.length === 0) {
