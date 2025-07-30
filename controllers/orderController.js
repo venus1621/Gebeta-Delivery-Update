@@ -100,7 +100,33 @@ export const placeOrder = async (req, res, next) => {
 
 
 
+export const getOrdersByRestaurantId = async (req, res, next) => {
+  const { restaurantId } = req.params;
 
+  if (!restaurantId) {
+    return next(new AppError('Restaurant ID is required', 400));
+  }
+
+  const orders = await Order.find({ restaurant_id: restaurantId })
+    .populate('userId', 'name email')
+    .populate('orderItems.foodId', 'title price imageCover')
+    .populate('restaurant_id', 'name')
+    .populate('deliveryId', 'name phone location')
+    .sort({ createdAt: -1 });
+
+  if (!orders || orders.length === 0) {
+    return res.status(404).json({
+      status: 'fail',
+      message: 'No orders found for this restaurant',
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    results: orders.length,
+    data: orders,
+  });
+};
 
 // Get my Orders
 export const getMyOrders = async (req, res, next) => {
