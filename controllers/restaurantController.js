@@ -242,7 +242,13 @@ const filteredBody = filterObj(
   'location',
   'cuisine',
   'description',
-  'imageCover'  // must match the field above
+  'imageCover',  // must match the field above
+  'deliveryRadiusMeters',
+  'openHours',
+  'isDeliveryAvailable',
+  'isOpenNow',
+  'address',
+  'deliveryradiusMeters' // ensure this matches your model fields
 );
 
   const restaurant = await Restaurant.findByIdAndUpdate(req.params.id, filteredBody, {

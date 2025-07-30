@@ -24,7 +24,7 @@ router
     uploadFoodImageToCloudinary,
     createFood
   );
-router.get('/by-menu/:menuId',protect,restrictTo('Admin', 'Manager'), getFoodsByMenuId);
+router.get('/by-menu/:menuId', getFoodsByMenuId);
 router
   .route('/:id')
   .get(getFood)
