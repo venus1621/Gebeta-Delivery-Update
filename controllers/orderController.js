@@ -202,44 +202,45 @@ export const getCurrentOrders = async (req, res) => {
 };
 
 
+ // Adjust the path based on your project structure
+
+// 🔁 PATCH /api/orders/:orderId/status
 export const updateOrderStatus = async (req, res) => {
   try {
-    const orderId = req.params.id;
+    const { orderId } = req.params;
     const { newStatus } = req.body;
 
-    // ✅ Valid statuses
+    // ✅ Define valid statuses
     const validStatuses = ['Pending', 'Preparing', 'Cooked', 'Delivering', 'Completed', 'Cancelled'];
 
+    // ❌ Validate status
     if (!validStatuses.includes(newStatus)) {
-      return res.status(400).json({ message: 'Invalid order status.' });
+      return res.status(400).json({ error: 'Invalid order status.' });
     }
 
-    // 🔄 Find and update
-    const order = await Order.findById(orderId);
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found.' });
+    // 🔍 Find and update order
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderId,
+      { orderStatus: newStatus },
+      { new: true } // return the updated doc
+    );
+
+    // ❌ Order not found
+    if (!updatedOrder) {
+      return res.status(404).json({ error: 'Order not found.' });
     }
 
-    // Optional: prevent backward transitions or invalid jumps
-    const currentIndex = validStatuses.indexOf(order.orderStatus);
-    const newIndex = validStatuses.indexOf(newStatus);
-    if (newIndex < currentIndex && newStatus !== 'Cancelled') {
-      return res.status(400).json({ message: 'Cannot move order status backward.' });
-    }
-
-    order.orderStatus = newStatus;
-    await order.save();
-
+    // ✅ Return updated order
     res.status(200).json({
-      status: 'success',
-      message: `Order status updated to ${newStatus}`,
-      data: order,
+      message: 'Order status updated successfully.',
+      order: updatedOrder,
     });
-
   } catch (err) {
-    res.status(500).json({ status: 'error', message: err.message });
+    console.error('Error updating order status:', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 };
+
 
 export const getCookedOrders = async (req, res, next) => {
   try {
