@@ -5,6 +5,10 @@ import APIFeatures from '../utils/apiFeatures.js';
 import User from '../models/userModel.js';
 import axios from 'axios';
 import NodeGeocoder from 'node-geocoder';
+import cloudinary from '../utils/cloudinary.js'; 
+import streamifier from 'streamifier';
+import filterObj from '../utils/filterObj.js';
+
 // Alias for top 5 rated restaurants
 export const aliasTopRestaurants = (req, res, next) => {
   req.query.limit = '5';
@@ -202,7 +206,46 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
 });
 // Update restaurant by ID
 export const updateRestaurant = catchAsync(async (req, res, next) => {
-  const restaurant = await Restaurant.findByIdAndUpdate(req.params.id, req.body, {
+  // Optional: Prevent password updates via this route
+  if (req.body.password || req.body.passwordConfirm) {
+    return next(new AppError('This route is not for password updates.', 400));
+  }
+  if (req.file) {
+  const uploadFromBuffer = (fileBuffer, publicId) => {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'restaurant_images',
+          public_id: publicId,
+          overwrite: true,
+          resource_type: 'image'
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      streamifier.createReadStream(fileBuffer).pipe(stream);
+    });
+  };
+
+  const publicId = req.params.id.toString(); // restaurant ID as image name
+  const result = await uploadFromBuffer(req.file.buffer, publicId);
+
+  req.body.imageCover = result.secure_url;  // <-- changed to match filterObj
+}
+
+// filter allowed fields for update
+const filteredBody = filterObj(
+  req.body,
+  'name',
+  'location',
+  'cuisine',
+  'description',
+  'imageCover'  // must match the field above
+);
+
+  const restaurant = await Restaurant.findByIdAndUpdate(req.params.id, filteredBody, {
     new: true,
     runValidators: true
   });
@@ -213,7 +256,9 @@ export const updateRestaurant = catchAsync(async (req, res, next) => {
 
   res.status(200).json({
     status: 'success',
-    data: { restaurant }
+    data: {
+      restaurant
+    }
   });
 });
 
