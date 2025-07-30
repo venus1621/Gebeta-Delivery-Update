@@ -240,7 +240,7 @@ const filteredBody = filterObj(
   req.body,
   'name',
   'location',
-  'cuisine',
+  'cuisineTypes',
   'description',
   'imageCover',  // must match the field above
   'deliveryRadiusMeters',
