@@ -117,6 +117,7 @@ export const assignDeliveryToOrder = async (req, res, next) => {
       deliveryPerson: deliveryPersonId,
       orderId,
       deliveryStatus: 'Assigned',
+      
     });
 
     // 3. Update the order without triggering full validation

@@ -155,10 +155,10 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
 
   // Validate manager
   if (!manager) {
-    return next(new AppError('A manager ID must be provided to create a restaurant.', 400));
+    return next(new AppError('A manager Phone must be provided to create a restaurant.', 400));
   }
 
-  const managerUser = await User.findById(manager);
+  const managerUser = await User.findone({ phone: manager } );
   if (!managerUser || (managerUser.role !== 'Manager' && managerUser.role !== 'Admin')) {
     return next(new AppError('Only a Manager or Admin can manage a restaurant.', 403));
   }
@@ -192,7 +192,7 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     openHours,
     isDeliveryAvailable,
     isOpenNow,
-    managerId: manager,
+    managerId: managerUser._id, // Use manager's I
     description
     // location: parsedLocation
   });
