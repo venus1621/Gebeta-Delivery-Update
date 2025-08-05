@@ -253,7 +253,8 @@ const filteredBody = filterObj(
   'isDeliveryAvailable',
   'isOpenNow',
   'address',
-  'deliveryradiusMeters' // ensure this matches your model fields
+  'deliveryradiusMeters',
+  
 );
 
   const restaurant = await Restaurant.findByIdAndUpdate(req.params.id, filteredBody, {
@@ -358,6 +359,44 @@ export const getRestaurantStats = catchAsync(async (req, res, next) => {
   });
 });
 
+export const assignRestaurantManager = catchAsync(async (req, res, next) => {
+  const { phone, restaurantId } = req.body;
+
+  if (!phone || !restaurantId) {
+    return next(new AppError('Phone number and restaurant ID are required', 400));
+  }
+
+  // 1. Find user by phone number
+  const user = await User.findOne({ phone });
+
+  if (!user) {
+    return next(new AppError('No user found with that phone number', 404));
+  }
+
+  // 2. Ensure user has Manager role
+  if (user.role !== 'Manager') {
+    return next(new AppError('User is not a Manager', 400));
+  }
+
+  // 3. Update restaurant with new manager
+  const restaurant = await Restaurant.findByIdAndUpdate(
+    restaurantId,
+    { managerId: user._id },
+    { new: true, runValidators: true }
+  );
+
+  if (!restaurant) {
+    return next(new AppError('Restaurant not found', 404));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: `Manager assigned to ${restaurant.name}`,
+    data: {
+      restaurant
+    }
+  });
+});
 
 
 
