@@ -144,59 +144,64 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
   const {
     name,
     license,
-    manager, // sent from client
+    manager, // phone number
+    cuisineTypes = [],
+    deliveryRadiusMeters,
+    openHours,
+    isDeliveryAvailable = false,
+    isOpenNow = false,
+    description,
+    location,
+  } = req.body;
+
+  // 1. Validate Manager
+  if (!manager) {
+    return next(new AppError('Manager phone number is required to create a restaurant.', 400));
+  }
+
+  const managerUser = await User.findOne({ phone: manager });
+
+  if (!managerUser || !['Manager', 'Admin'].includes(managerUser.role)) {
+    return next(new AppError('Only users with role "Manager" or "Admin" can manage a restaurant.', 403));
+  }
+
+  // // 2. Validate and Format Location
+  // if (!location || !location.address || !location.coordinates) {
+  //   return next(new AppError('Location must include an address and coordinates.', 400));
+  // }
+
+  // const [longitude, latitude] = location.coordinates.map(coord => parseFloat(coord));
+
+  // if (
+  //   location.coordinates.length !== 2 ||
+  //   isNaN(longitude) ||
+  //   isNaN(latitude)
+  // ) {
+  //   return next(new AppError('Coordinates must be an array of valid numbers: [longitude, latitude].', 400));
+  // }
+
+  // const parsedLocation = {
+  //   type: 'Point',
+  //   coordinates: [longitude, latitude],
+  //   address: location.address,
+  //   description: location.description || ''
+  // };
+
+  // 3. Create Restaurant
+  const newRestaurant = await Restaurant.create({
+    name,
+    license,
+    managerId: managerUser._id,
     cuisineTypes,
     deliveryRadiusMeters,
     openHours,
     isDeliveryAvailable,
     isOpenNow,
     description,
-  } = req.body;
-
-  // Validate manager
-  if (!manager) {
-    return next(new AppError('A manager Phone must be provided to create a restaurant.', 400));
-  }
-
-  const managerUser = await User.findone({ phone: manager } );
-  if (!managerUser || (managerUser.role !== 'Manager' && managerUser.role !== 'Admin')) {
-    return next(new AppError('Only a Manager or Admin can manage a restaurant.', 403));
-  }
-
-  // Handle location
-  // if (!location || !location.address || !location.coordinates) {
-  //   return next(new AppError('Location with address and coordinates is required.', 400));
-  // }
-
-  // const coordinates = Array.isArray(location.coordinates)
-  //   ? location.coordinates.map(coord => parseFloat(coord))
-  //   : [NaN, NaN];
-
-  // if (coordinates.length !== 2 || coordinates.some(isNaN)) {
-  //   return next(new AppError('Coordinates must be valid [longitude, latitude] numbers.', 400));
-  // }
-
-  // const parsedLocation = {
-  //   type: 'Point',
-  //   coordinates,
-  //   address: location.address,
-  //   description: location.description || ''
-  // };
-
-  // Create the restaurant
-  const newRestaurant = await Restaurant.create({
-    name,
-    license,
-    cuisineTypes,
-    deliveryRadiusMeters,
-    openHours,
-    isDeliveryAvailable,
-    isOpenNow,
-    managerId: managerUser._id, // Use manager's I
-    description
-    // location: parsedLocation
+    location: parsedLocation
   });
 
+  // 4. Respond
   res.status(201).json({
     status: 'success',
     data: {
