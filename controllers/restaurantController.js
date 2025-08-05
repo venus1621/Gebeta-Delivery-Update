@@ -151,7 +151,7 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     isDeliveryAvailable = false,
     isOpenNow = false,
     description,
-    location,
+   
   } = req.body;
 
   // 1. Validate Manager
@@ -198,7 +198,7 @@ export const createRestaurant = catchAsync(async (req, res, next) => {
     isDeliveryAvailable,
     isOpenNow,
     description,
-    location: parsedLocation
+
   });
 
   // 4. Respond
