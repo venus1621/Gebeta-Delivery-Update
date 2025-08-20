@@ -138,6 +138,9 @@ const computeDeliveryFee = async ({ restaurantLocation, destinationLocation, veh
 export const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
   const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
   if (!chapaSecretKey) throw new Error('CHAPA_SECRET_KEY is not configured');
+  
+  console.log('Chapa API Key configured:', chapaSecretKey ? 'Yes' : 'No');
+  console.log('Payment initialization parameters:', { amount, currency, orderId, userEmail: user.email });
 
   if (!amount || !currency || !orderId) {
     throw new Error('Missing required parameters: amount, currency, and orderId are required.');
@@ -147,36 +150,127 @@ export const initializeChapaPayment = async ({ amount, currency, orderId, user }
     throw new Error('User email, first name, and last name are required for hosted checkout.');
   }
 
-  const chapaApiUrl = 'https://api.chapa.co/v1/hosted/initialize';
-  const txRef = `order-${orderId.toString()}`;
+  // Try the latest Chapa API endpoint first
+  let chapaApiUrl = 'https://api.chapa.co/v1/transaction/initialize';
+  let txRef = `order-${orderId.toString()}`;
+  
+  // Log the API endpoint being used
+  console.log('Using Chapa API endpoint:', chapaApiUrl);
 
-  const response = await axios.post(
-    chapaApiUrl,
-    {
-      amount: amount.toString(),
-      currency, 
-      first_name: user.firstName,
-      tx_ref: txRef,
-      callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
-      return_url: 'https://your-app.com/payment-success', // Replace with your frontend success page
-      customization: {
-        title: 'Order Payment',
-        description: `Payment for order ${txRef}`,
-      },
+  // Prepare the request payload
+  const requestPayload = {
+    amount: amount.toString(),
+    currency, 
+    first_name: user.firstName,
+    last_name: user.lastName || '',
+   
+    tx_ref: txRef,
+    callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
+    return_url: 'https://gebeta-delivery1.onrender.com/payment-success', // Updated return URL
+    customization: {
+      title: 'Order Payment',
+      description: `Payment for order ${txRef}`,
     },
-    {
-      headers: {
-        Authorization: `Bearer ${chapaSecretKey}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
+  };
+
+  let response;
+  try {
+    // Try the new endpoint first
+    response = await axios.post(
+      chapaApiUrl,
+      requestPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${chapaSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+      } catch (error) {
+      console.log('Primary Chapa endpoint failed, trying fallback endpoints...');
+      console.log('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.message
+      });
+      
+      // If the new endpoint fails, try the old hosted endpoint
+      if (error.response?.status === 405 || error.response?.status === 404) {
+        console.log('Trying fallback Chapa hosted endpoint...');
+        chapaApiUrl = 'https://api.chapa.co/v1/hosted/initialize';
+      
+      // Remove fields that might not be supported by hosted endpoint
+      const fallbackPayload = {
+        amount: amount.toString(),
+        currency, 
+        first_name: user.firstName,
+        tx_ref: txRef,
+        callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
+        return_url: 'https://gebeta-delivery1.onrender.com/payment-success',
+        customization: {
+          title: 'Order Payment',
+          description: `Payment for order ${txRef}`,
+        },
+      };
+
+              response = await axios.post(
+          chapaApiUrl,
+          fallbackPayload,
+          {
+            headers: {
+              Authorization: `Bearer ${chapaSecretKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+          }
+        );
+      } else if (error.response?.status === 405 || error.response?.status === 404) {
+        // Try one more fallback endpoint
+        console.log('Trying second fallback Chapa endpoint...');
+        chapaApiUrl = 'https://api.chapa.co/v1/transaction/initialize';
+        
+        // Try with minimal payload
+        const minimalPayload = {
+          amount: amount.toString(),
+          currency,
+          first_name: user.firstName,
+          tx_ref: txRef,
+          callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
+        };
+        
+        response = await axios.post(
+          chapaApiUrl,
+          minimalPayload,
+          {
+            headers: {
+              Authorization: `Bearer ${chapaSecretKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+          }
+        );
+      } else {
+        throw error;
+      }
     }
-  );
 
   if (!response?.data || response.data.status !== 'success') {
     const message = response?.data?.message || 'Unknown error';
+    console.error('Chapa API response error:', {
+      status: response?.status,
+      statusText: response?.statusText,
+      data: response?.data,
+      headers: response?.headers
+    });
     throw new Error(`Failed to initialize Chapa payment: ${message}`);
   }
+
+  console.log('Chapa payment initialized successfully:', {
+    tx_ref: txRef,
+    checkout_url: response.data.data.checkout_url,
+    api_endpoint_used: chapaApiUrl
+  });
 
   return {
     tx_ref: txRef,
@@ -187,6 +281,13 @@ export const initializeChapaPayment = async ({ amount, currency, orderId, user }
 
 export const placeOrder = async (req, res, next) => {
   try {
+    // Log environment variables for debugging
+    console.log('Environment check:', {
+      CHAPA_SECRET_KEY: process.env.CHAPA_SECRET_KEY ? 'Configured' : 'Not configured',
+      NODE_ENV: process.env.NODE_ENV,
+      DATABASE: process.env.DATABASE ? 'Configured' : 'Not configured'
+    });
+
     const { orderItems, typeOfOrder, vehicleType, destinationLocation, tip } = req.body;
     const userId = req.user._id;
 
@@ -292,12 +393,14 @@ export const placeOrder = async (req, res, next) => {
     console.log(`Placing order for user: ${user.firstName} (${user.email}) with total price: ${totalPrice}`);
 
     // Initialize Chapa payment (Hosted Checkout)
+    console.log('Initializing Chapa payment...');
     const paymentInit = await initializeChapaPayment({
       amount: totalPrice,
       currency: 'ETB',
       orderId: order._id,
       user,
     });
+    console.log('Chapa payment initialized successfully');
 
     res.status(201).json({
       status: 'success',
@@ -317,6 +420,18 @@ export const placeOrder = async (req, res, next) => {
     });
   } catch (error) {
     console.error('Error placing order:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    // Log additional error details for debugging
+    if (error.response) {
+      console.error('Error response details:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+    }
+    
     next(error);
   }
 };
@@ -396,14 +511,32 @@ export const chapaWebhook = async (req, res, next) => {
     }
 
     // Verify transaction with Chapa
-    const chapaApiUrl = `https://api.chapa.co/v1/transaction/verify/${trx_ref}`;
+    let chapaApiUrl = `https://api.chapa.co/v1/transaction/verify/${trx_ref}`;
     const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
-    const response = await axios.get(chapaApiUrl, {
-      headers: {
-        Authorization: `Bearer ${chapaSecretKey}`,
-      },
-      timeout: 15000,
-    });
+    
+    let response;
+    try {
+      response = await axios.get(chapaApiUrl, {
+        headers: {
+          Authorization: `Bearer ${chapaSecretKey}`,
+        },
+        timeout: 15000,
+      });
+    } catch (error) {
+      // Try fallback verification endpoint
+      if (error.response?.status === 405 || error.response?.status === 404) {
+        console.log('Trying fallback verification endpoint...');
+        chapaApiUrl = `https://api.chapa.co/v1/transaction/verify/${trx_ref}`;
+        response = await axios.get(chapaApiUrl, {
+          headers: {
+            Authorization: `Bearer ${chapaSecretKey}`,
+          },
+          timeout: 15000,
+        });
+      } else {
+        throw error;
+      }
+    }
 
     if (response.data.status !== 'success' || response.data.data.status !== 'success') {
       return res.status(400).json({ error: { message: 'Transaction verification failed.' } });
