@@ -23,77 +23,77 @@ const generateVerificationCode = () => {
 };
 
 // Initialize Chapa Direct Charge payment
-export const initializeChapaPayment = async ({ amount, currency, mobile, orderId, payment_method, user, useHostedCheckout = false }) => {
-  const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
-  if (!chapaSecretKey) throw new Error('CHAPA_SECRET_KEY is not configured');
+// export const initializeChapaPayment = async ({ amount, currency, mobile, orderId, payment_method, user, useHostedCheckout = false }) => {
+//   const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
+//   if (!chapaSecretKey) throw new Error('CHAPA_SECRET_KEY is not configured');
 
-  if (!amount || !currency || !orderId || !payment_method) {
-    throw new Error('Missing required parameters: amount, currency, orderId, and payment_method are required.');
-  }
+//   if (!amount || !currency || !orderId || !payment_method) {
+//     throw new Error('Missing required parameters: amount, currency, orderId, and payment_method are required.');
+//   }
 
-  if (useHostedCheckout && (!user?.email || !user?.firstName || !user?.lastName)) {
-    throw new Error('User email, first name, and last name are required for hosted checkout.');
-  }
+//   if (useHostedCheckout && (!user?.email || !user?.firstName || !user?.lastName)) {
+//     throw new Error('User email, first name, and last name are required for hosted checkout.');
+//   }
 
-  const txRef = `order-${orderId.toString()}`;
-  let chapaApiUrl;
-  let payload;
+//   const txRef = `order-${orderId.toString()}`;
+//   let chapaApiUrl;
+//   let payload;
 
-  if (useHostedCheckout) {
-    // Use Hosted Checkout API
-    chapaApiUrl = 'https://api.chapa.co/v1/hosted/initialize';
-    payload = {
-      amount: amount.toString(),
-      currency,
-      email: user.email,
-      first_name: user.firstName,
-      last_name: user.lastName,
-      tx_ref: txRef,
-      callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
-      return_url: 'https://your-app.com/payment-success', // Replace with your frontend success page
-      customization: {
-        title: 'Order Payment',
-        description: `Payment for order ${txRef}`,
-      },
-    };
-  } else {
-    // Use Direct Charge API (existing logic)
-    if (!mobile) {
-      throw new Error('Mobile number is required for direct charge.');
-    }
-    chapaApiUrl = `https://api.chapa.co/v1/charges?type=${payment_method}`;
-    payload = {
-      amount: amount.toString(),
-      currency,
-      mobile,
-      tx_ref: txRef,
-      callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
-    };
-  }
+//   if (useHostedCheckout) {
+//     // Use Hosted Checkout API
+//     chapaApiUrl = 'https://api.chapa.co/v1/hosted/initialize';
+//     payload = {
+//       amount: amount.toString(),
+//       currency,
+//       email: user.email,
+//       first_name: user.firstName,
+//       last_name: user.lastName,
+//       tx_ref: txRef,
+//       callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
+//       return_url: 'https://your-app.com/payment-success', // Replace with your frontend success page
+//       customization: {
+//         title: 'Order Payment',
+//         description: `Payment for order ${txRef}`,
+//       },
+//     };
+//   } else {
+//     // Use Direct Charge API (existing logic)
+//     if (!mobile) {
+//       throw new Error('Mobile number is required for direct charge.');
+//     }
+//     chapaApiUrl = `https://api.chapa.co/v1/charges?type=${payment_method}`;
+//     payload = {
+//       amount: amount.toString(),
+//       currency,
+//       mobile,
+//       tx_ref: txRef,
+//       callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
+//     };
+//   }
 
-  const response = await axios.post(
-    chapaApiUrl,
-    payload,
-    {
-      headers: {
-        Authorization: `Bearer ${chapaSecretKey}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
-    }
-  );
+//   const response = await axios.post(
+//     chapaApiUrl,
+//     payload,
+//     {
+//       headers: {
+//         Authorization: `Bearer ${chapaSecretKey}`,
+//         'Content-Type': 'application/json',
+//       },
+//       timeout: 15000,
+//     }
+//   );
 
-  if (!response?.data || response.data.status !== 'success') {
-    const message = response?.data?.message || 'Unknown error';
-    throw new Error(`Failed to initialize Chapa payment: ${message}`);
-  }
+//   if (!response?.data || response.data.status !== 'success') {
+//     const message = response?.data?.message || 'Unknown error';
+//     throw new Error(`Failed to initialize Chapa payment: ${message}`);
+//   }
 
-  return {
-    tx_ref: txRef,
-    provider_response: response.data.data,
-    checkout_url: useHostedCheckout ? response.data.data.checkout_url : null, // Return checkout_url for hosted checkout
-  };
-};
+//   return {
+//     tx_ref: txRef,
+//     provider_response: response.data.data,
+//     checkout_url: useHostedCheckout ? response.data.data.checkout_url : null, // Return checkout_url for hosted checkout
+//   };
+// };
 
 const computeDeliveryFee = async ({ restaurantLocation, destinationLocation, vehicleType }) => {
   if (!destinationLocation?.lat || !destinationLocation?.lng) {
@@ -135,21 +135,63 @@ const computeDeliveryFee = async ({ restaurantLocation, destinationLocation, veh
   return { deliveryFee, distanceKm, distanceInMeters, rate: selectedRate, destination: destinationLocation };
 };
 
+export const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
+  const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
+  if (!chapaSecretKey) throw new Error('CHAPA_SECRET_KEY is not configured');
+
+  if (!amount || !currency || !orderId) {
+    throw new Error('Missing required parameters: amount, currency, and orderId are required.');
+  }
+
+  if (!user?.firstName) {
+    throw new Error('User email, first name, and last name are required for hosted checkout.');
+  }
+
+  const chapaApiUrl = 'https://api.chapa.co/v1/hosted/initialize';
+  const txRef = `order-${orderId.toString()}`;
+
+  const response = await axios.post(
+    chapaApiUrl,
+    {
+      amount: amount.toString(),
+      currency, 
+      first_name: user.firstName,
+      tx_ref: txRef,
+      callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
+      return_url: 'https://your-app.com/payment-success', // Replace with your frontend success page
+      customization: {
+        title: 'Order Payment',
+        description: `Payment for order ${txRef}`,
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${chapaSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    }
+  );
+
+  if (!response?.data || response.data.status !== 'success') {
+    const message = response?.data?.message || 'Unknown error';
+    throw new Error(`Failed to initialize Chapa payment: ${message}`);
+  }
+
+  return {
+    tx_ref: txRef,
+    provider_response: response.data.data,
+    checkout_url: response.data.data.checkout_url, // Return checkout_url for redirection
+  };
+};
+
 export const placeOrder = async (req, res, next) => {
   try {
-    const { orderItems, typeOfOrder, vehicleType, destinationLocation, tip,payment_method } = req.body;
+    const { orderItems, typeOfOrder, vehicleType, destinationLocation, tip } = req.body;
     const userId = req.user._id;
 
-    if (!orderItems || orderItems.length === 0 || !typeOfOrder || !payment_method) {
-      return res.status(400).json({ error: { message: 'No order items, type of order, or payment method provided.' } });
-    }
-
-    // Validate payment method
-    const allowedPaymentMethods = ['telebirr', 'mpesa', 'cbebirr', 'ebirr', 'enat_bank'];
-    if (!allowedPaymentMethods.includes(payment_method)) {
-      return res.status(400).json({
-        error: { message: `payment_method must be one of ${allowedPaymentMethods.join(', ')}.` },
-      });
+    if (!orderItems || orderItems.length === 0 || !typeOfOrder) {
+      return res.status(400).json({ error: { message: 'No order items or type of order provided.' } });
     }
 
     // Validate tip
@@ -208,8 +250,6 @@ export const placeOrder = async (req, res, next) => {
         return res.status(400).json({ error: { message: 'Valid destination location coordinates are required for delivery.' } });
       }
 
-    
-
       const { deliveryFee: computedFee, distanceKm } = await computeDeliveryFee({
         restaurantLocation,
         destinationLocation,
@@ -233,37 +273,38 @@ export const placeOrder = async (req, res, next) => {
       deliveryVehicle: vehicleType || null,
       restaurant_id,
       location: typeOfOrder === 'Delivery' ? destinationLocation : null,
-      order_id: null, // Initialize as null, set when transaction is Paid
-      verification_code: null, // Initialize as null, set when transaction is Paid
+      order_id: null,
+      verification_code: null,
       transaction: {
-        Total_Price: totalPrice.toString(), // Convert to string for Decimal128
+        Total_Price: totalPrice.toString(),
         Status: 'Pending',
       },
     });
 
-    // Validate user information for Chapa
+    // Validate user information for Chapa Hosted Checkout
     const user = await User.findById(userId);
-    if (!user.firstName) {
+    if (!user.firstName || !user.lastName || !user.email) {
       return res.status(400).json({
-        error: { message: 'User email and first name are required for payment processing.' },
+        error: { message: 'User first name, last name, and email are required for payment processing.' },
       });
     }
-    console.log(`Placing order for user: ${user.firstName} (${user.phone}) with total price: ${totalPrice}`);
-    // Initialize Chapa payment
+
+    console.log(`Placing order for user: ${user.firstName} (${user.email}) with total price: ${totalPrice}`);
+
+    // Initialize Chapa payment (Hosted Checkout)
     const paymentInit = await initializeChapaPayment({
       amount: totalPrice,
       currency: 'ETB',
-      mobile: user.phone,
       orderId: order._id,
-      payment_method,
+      user,
     });
-    
 
     res.status(201).json({
       status: 'success',
       data: {
         order,
         payment: paymentInit,
+        checkout_url: paymentInit.checkout_url, // Include checkout_url for frontend redirect
         summary: {
           foodTotal,
           deliveryFee,
