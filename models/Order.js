@@ -19,7 +19,6 @@ const orderSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
-
     orderItems: [
       {
         foodId: {
@@ -30,34 +29,34 @@ const orderSchema = new mongoose.Schema(
         quantity: { type: Number, required: true, min: 1 },
       },
     ],
-
     // 🧾 Total prices breakdown
-    foodTotal: { type: Number, required: true },          // New: food total
-    deliveryFee: { type: Number, default: 0 },             // New: delivery fee
-    totalPrice: { type: Number, required: true },          // Grand total = food + delivery
-
+    foodTotal: { type: Number, required: true }, // Food total
+    deliveryFee: { type: Number, default: 0 }, // Delivery fee
+    tip: { type: Number, default: 0, min: 0 }, // Tip amount
+    totalPrice: { type: Number, required: true }, // Grand total = food + delivery + tip
     typeOfOrder: {
       type: String,
       enum: ['Delivery', 'Takeaway'],
       default: 'Delivery',
       required: true,
     },
-
+    deliveryVehicle: {
+      type: String,
+      enum: ['Car', 'Motor', 'Bicycle'],
+    },
     restaurant_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Restaurant',
       required: [true, 'restaurant_id is required'],
     },
-
     // 📍 Delivery address (if applicable)
     location: {
       lat: { type: Number },
       lng: { type: Number },
     },
-
     orderStatus: {
       type: String,
-      enum: ['Pending', 'Preparing','Cooked', 'Delivering', 'Completed', 'Cancelled'],
+      enum: ['Pending', 'Preparing', 'Cooked', 'Delivering', 'Completed', 'Cancelled'],
       default: 'Pending',
     },
     // 🔗 Optional reference to Delivery document
@@ -65,7 +64,15 @@ const orderSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Deliver',
     },
-
+    // 🆔 Unique order ID and verification code
+    order_id: {
+      type: String,
+      // unique: true,
+      // sparse: true, // Allows null values while ensuring uniqueness
+    },
+    verification_code: {
+      type: String,
+    },
     transaction: {
       type: transactionSchema,
       required: true,

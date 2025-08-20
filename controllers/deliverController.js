@@ -1,5 +1,6 @@
 import Deliver from '../models/Deliver.js';
 import Order from '../models/Order.js';
+import { getIO } from '../utils/socket.js';
 
 
 // export const createDelivery = async (req, res, next) => {
@@ -84,6 +85,19 @@ export const createDelivery = async (req, res, next) => {
     order.orderStatus = 'Delivering';
     await order.save();
 
+    // 🔊 notify rooms about assignment
+    try {
+      const io = getIO();
+      if (io) {
+        io.emit('delivery:assigned', {
+          orderId: orderId,
+          deliveryId: delivery._id,
+          deliveryPerson: deliveryPersonId,
+        });
+        io.emit('order:status', { orderId, status: 'Delivering' });
+      }
+    } catch {}
+
     res.status(201).json({
       message: 'Delivery successfully created and assigned.',
       delivery,
@@ -133,6 +147,19 @@ export const assignDeliveryToOrder = async (req, res, next) => {
       }
     );
 
+    // 🔊 broadcast acceptance to all clients (admins, other delivery clients, user channels if needed)
+    try {
+      const io = getIO();
+      if (io) {
+        io.emit('delivery:assigned', {
+          orderId,
+          deliveryId: delivery._id,
+          deliveryPerson: deliveryPersonId,
+        });
+        io.emit('order:status', { orderId, status: 'Delivering' });
+      }
+    } catch {}
+
     res.status(201).json({
       message: 'Delivery person assigned successfully.',
       delivery,
@@ -176,6 +203,19 @@ export const cancelDeliveryAssignment = async (req, res, next) => {
     order.deliveryId = null;
     order.orderStatus = 'Cooked'; // revert back to cooked, waiting for another delivery assignment
     await order.save();
+
+    // 🔊 notify that assignment was cancelled so other delivery people can pick up
+    try {
+      const io = getIO();
+      if (io) {
+        io.emit('delivery:cancelled', {
+          orderId,
+          deliveryId: delivery._id,
+          deliveryPerson: deliveryPersonId,
+        });
+        io.emit('order:status', { orderId, status: 'Cooked' });
+      }
+    } catch {}
 
     res.status(200).json({
       status: 'success',

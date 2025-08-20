@@ -69,6 +69,13 @@ router.patch('/updateMyPassword', updatePassword);
 
 // Update current user's profile info
 router.patch('/updateMe', upload.single('profilePicture'), updateMe);
+// Allow delivery users to set delivery method
+// Expected body: { deliveryMethod: 'Car' | 'Motor' | 'Bicycle' }
+// Uses same controller as updateMe, but separate route for clarity in clients
+router.patch('/me/delivery-method', (req, res, next) => {
+  req.body = { deliveryMethod: req.body.deliveryMethod };
+  next();
+}, updateMe);
 
 // Soft delete current user's account
 router.delete('/deleteMe', deleteMe);

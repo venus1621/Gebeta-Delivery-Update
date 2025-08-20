@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
-import { type } from 'os';
+
 
 const userSchema = new mongoose.Schema(
   {
@@ -88,6 +88,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['Customer', 'Manager', 'Delivery_Person', 'Admin'],
       default: 'Customer',
+    },
+    deliveryMethod: {
+      type: String,
+      enum: ['Car', 'Motor', 'Bicycle'],
     },
     location: {
       latitude: { type: Number },
