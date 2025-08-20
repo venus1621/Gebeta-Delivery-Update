@@ -41,7 +41,7 @@ const generateVerificationCode = () => {
       currency,
       mobile,
       tx_ref: txRef,
-      callback_url: "https://c06eda175b18.ngrok-free.app/api/v1/orders/chapaWebhook"    
+      callback_url: "https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook"    
     },
     {
       headers: {
