@@ -8,6 +8,7 @@ const transactionSchema = new mongoose.Schema({
     enum: ['Pending', 'Paid'],
     default: 'Pending',
   },
+  ref_id: { type: String, unique: true, sparse: true }, // Unique reference ID for the transaction
   Created_At: { type: Date, default: Date.now },
 });
 
