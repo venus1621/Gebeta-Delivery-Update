@@ -32,6 +32,7 @@ router.get('/cooked', protect, getCookedOrders);
 
 // Payment webhook
 router.post('/chapa-webhook', chapaWebhook);
+router.get("/chapa-webhook", chapaWebhook);
 
 
 export default router;
