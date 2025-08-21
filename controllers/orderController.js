@@ -433,7 +433,8 @@ export const chapaWebhook = async (req, res) => {
     // 3. Update order payment status
     order.transaction.Status = status === "success" ? "Paid" : "Failed";
     order.transaction.ref_id = ref_id;
-    order.order_id = trx_ref;
+    order.order_id = await generateOrderId();
+    order.verification_code = generateVerificationCode();
     await order.save();
 
     console.log("Order updated successfully:", order._id);
