@@ -405,63 +405,44 @@ export const updateOrderStatus = async (req, res, next) => {
   }
 };
 
-export const chapaWebhook = async (req, res, next) => {
+export const chapaWebhook = async (req, res) => {
   try {
-    const { trx_ref, status } = req.body;
+    const { trx_ref, ref_id, status } = req.query;
 
-    if (!trx_ref || !status) {
-      return res.status(400).json({ error: { message: 'Transaction reference and status are required.' } });
+    console.log("Webhook received:", { trx_ref, ref_id, status });
+
+    // 1. Verify with Chapa (optional but safer)
+    const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
+    const verifyUrl = `https://api.chapa.co/v1/transaction/verify/${trx_ref}`;
+
+    const verifyRes = await axios.get(verifyUrl, {
+      headers: { Authorization: `Bearer ${chapaSecretKey}` },
+    });
+
+    if (verifyRes.data.status !== "success") {
+      return res.status(400).json({ message: "Verification failed" });
     }
 
-    const orderId = trx_ref.replace('order-', '');
+    // 2. Find order
+    const orderId = trx_ref.replace("order-", "");
     const order = await Order.findById(orderId);
     if (!order) {
-      return res.status(404).json({ error: { message: 'Order not found.' } });
+      return res.status(404).json({ message: "Order not found" });
     }
 
-    // Verify transaction with Chapa
-    let chapaApiUrl = `https://api.chapa.co/v1/transaction/verify/${trx_ref}`;
-    const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
-    
-    let response;
-    try {
-      response = await axios.get(chapaApiUrl, {
-        headers: {
-          Authorization: `Bearer ${chapaSecretKey}`,
-        },
-        timeout: 35000,
-      });
-    } catch (error) {
-      // Try fallback verification endpoint
-      if (error.response?.status === 405 || error.response?.status === 404) {
-        console.log('Trying fallback verification endpoint...');
-        chapaApiUrl = `https://api.chapa.co/v1/transaction/verify/${trx_ref}`;
-        response = await axios.get(chapaApiUrl, {
-          headers: {
-            Authorization: `Bearer ${chapaSecretKey}`,
-          },
-          timeout: 35000,
-        });
-      } else {
-        throw error;
-      }
-    }
+    // 3. Update order payment status
+    order.transaction.Status = status === "success" ? "Paid" : "Failed";
+    order.transaction.ref_id = ref_id;
+    order.order_id = trx_ref;
+    await order.save();
 
-    if (response.data.status !== 'success' || response.data.data.status !== 'success') {
-      return res.status(400).json({ error: { message: 'Transaction verification failed.' } });
-    }
+    console.log("Order updated successfully:", order._id);
 
-    if (status === 'success' && order.transaction.Status === 'Pending') {
-      order.transaction.Status = 'Paid';
-      order.order_id = await generateOrderId();
-      order.verification_code = generateVerificationCode();
-      await order.save();
-    }
-
-    res.status(200).json({ status: 'success', message: 'Webhook processed.' });
-  } catch (error) {
-    console.error('Error processing Chapa webhook:', error.message);
-    next(error);
+    // 4. Respond OK to Chapa
+    return res.status(200).json({ message: "Webhook processed successfully" });
+  } catch (err) {
+    console.error("Webhook error:", err.message);
+    return res.status(500).json({ message: "Server error processing webhook" });
   }
 };
 
