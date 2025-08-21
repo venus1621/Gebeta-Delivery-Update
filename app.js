@@ -41,7 +41,7 @@ app.use('/api/v1/food-categories', categoryRoutes);
 app.use('/api/v1/restaurants', restaurantRoutes);
 app.use('/api/v1/food-menus', foodMenuRoutes);
 app.use('/api/v1/orders', orderRoutes);
-// app.use('/api/v1/transactions', transactionRoutes);
+// app.use('/api/v1/transactionss', transactionRoutes);
 app.use('/api/v1/deliveries', deliverRoutes);
 app.use('/api/v1/reviews', reviewRouter);
 app.use('/api/v1/restaurants/:restaurantId/reviews', reviewRouter);

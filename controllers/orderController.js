@@ -106,6 +106,7 @@ const computeDeliveryFee = async ({ restaurantLocation, destinationLocation, veh
   const osrmUrl = `https://router.project-osrm.org/route/v1/${mode}/${origins};${destinations}?overview=false`;
   const osrmResponse = await axios.get(osrmUrl);
   const distanceInMeters = osrmResponse?.data?.routes?.[0]?.distance;
+  const durationInSeconds = osrmResponse?.data?.routes?.[0]?.duration;
   if (!distanceInMeters) {
     throw new Error('Failed to calculate delivery distance.');
   }
@@ -132,7 +133,7 @@ const computeDeliveryFee = async ({ restaurantLocation, destinationLocation, veh
   const rawFee = selectedRate.base + selectedRate.perKm * distanceKm;
   const deliveryFee = Math.ceil(rawFee);
 
-  return { deliveryFee, distanceKm, distanceInMeters, rate: selectedRate, destination: destinationLocation };
+  return { deliveryFee, distanceKm,durationInSeconds, distanceInMeters, rate: selectedRate, destination: destinationLocation };
 };
 
 const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
@@ -349,9 +350,13 @@ export const updateOrderStatus = async (req, res, next) => {
   try {
     const { orderId, status } = req.body;
     const allowedStatuses = ['Pending', 'Preparing', 'Cooked', 'Delivering', 'Completed', 'Cancelled'];
+
     if (!orderId || !allowedStatuses.includes(status)) {
       return res.status(400).json({
-        error: { message: 'Valid orderId and status (Pending, Preparing, Cooked, Delivering, Completed, Cancelled) are required.' },
+        error: {
+          message:
+            'Valid orderId and status (Pending, Preparing, Cooked, Delivering, Completed, Cancelled) are required.',
+        },
       });
     }
 
@@ -363,6 +368,7 @@ export const updateOrderStatus = async (req, res, next) => {
     order.orderStatus = status;
     await order.save();
 
+    // 🔹 Only broadcast when the order is cooked and requires delivery
     if (status === 'Cooked' && order.typeOfOrder === 'Delivery') {
       const restaurant = await Restaurant.findById(order.restaurant_id);
       if (!restaurant) {
@@ -373,6 +379,11 @@ export const updateOrderStatus = async (req, res, next) => {
           lng: restaurant.location.coordinates[0],
         };
 
+        const deliveryLocation = order.location;
+
+        // 🔹 Calculate grand total = food total + delivery fee + tip
+        const grandTotal = Number(order.deliveryFee) + Number(order.tip || 0);
+
         const io = getIO();
         if (!io) {
           console.warn('Socket.IO not initialized, skipping delivery notification.');
@@ -380,24 +391,21 @@ export const updateOrderStatus = async (req, res, next) => {
           io.to('deliveries').emit('order:cooked', {
             orderId: order._id,
             order_id: order.order_id,
-            restaurantId: order.restaurant_id,
             restaurantLocation,
-            destinationLocation: order.location,
+            deliveryLocation,
             deliveryFee: order.deliveryFee,
             tip: order.tip,
-            verification_code: order.verification_code,
-            totalPrice: order.totalPrice,
-            foodTotal: order.foodTotal,
+            grandTotal,
             createdAt: order.createdAt,
           });
-          console.log(`Broadcasted cooked order notification for order ${order._id}`);
+          console.log(`✅ Broadcasted cooked order notification for order ${order._id}`);
         }
       }
     }
 
     res.status(200).json({
       status: 'success',
-      data: { order },
+      message: `Order status updated to ${status}.`,
     });
   } catch (error) {
     console.error('Error updating order status:', error.message);
@@ -495,30 +503,62 @@ export const verifyOrderDelivery = async (req, res, next) => {
 };
 
 export const getOrdersByRestaurantId = async (req, res, next) => {
-  const { restaurantId } = req.params;
+  try {
+    const { restaurantId } = req.params;
 
-  if (!restaurantId) {
-    return next(new AppError('Restaurant ID is required', 400));
-  }
+    if (!restaurantId) {
+      return next(new AppError('Restaurant ID is required', 400));
+    }
 
-  const orders = await Order.find({ restaurant_id: restaurantId })
-    .populate('userId', 'firstName lastName phone status')
-    .populate('orderItems.foodId', 'foodName price imageCover')
-    .populate('deliveryId', 'deliveryType ')
-    .sort({ createdAt: -1 });
+    // 🔹 Query with conditions: Paid transactions + allowed order statuses
+    const orders = await Order.find({
+      restaurant_id: restaurantId,
+      'transaction.Status': 'Paid',
+      orderStatus: { $in: ['Pending', 'Preparing', 'Cooked'] },
+    })
+      .populate('userId', 'firstName phone')
+      .populate('orderItems.foodId', 'foodName price')
+      .sort({ createdAt: -1 });
 
-  if (!orders || orders.length === 0) {
-    return res.status(404).json({
-      status: 'fail',
-      message: 'No orders found for this restaurant',
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No matching orders found for this restaurant',
+      });
+    }
+
+    // 🔹 Format response
+    const formattedOrders = orders.map(order => {
+      const totalFoodPrice = order.orderItems.reduce((sum, item) => {
+        const price = item.foodId?.price || 0;
+        return sum + price * item.quantity;
+      }, 0);
+
+      return {
+        userName: order.userId?.firstName,
+        phone: order.userId?.phone,
+        items: order.orderItems.map(item => ({
+          foodName: item.foodId?.foodName,
+          quantity: item.quantity,
+          price: item.foodId?.price,
+        })),
+        totalFoodPrice,
+        orderDate: order.createdAt,
+        orderType: order.typeOfOrder,
+        orderStatus: order.orderStatus,
+        orderId: order._id,
+    
+      };
     });
-  }
 
-  res.status(200).json({
-    status: 'success',
-    results: orders.length,
-    data: orders,
-  });
+    res.status(200).json({
+      status: 'success',
+      results: formattedOrders.length,
+      data: formattedOrders,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // Get my Orders
@@ -595,10 +635,6 @@ export const getCurrentOrders = async (req, res) => {
   }
 };
 
- // Adjust the path based on your project structure
-
-
-
 export const getCookedOrders = async (req, res, next) => {
   try {
     const cookedOrders = await Order.find({ orderStatus: 'Cooked' })
@@ -643,30 +679,25 @@ export const estimateDeliveryFee = async (req, res) => {
       lng: restaurant.location.coordinates[0],
     };
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ message: 'Google Maps API key is missing.' });
-    }
-
     const allowedVehicles = ['Car', 'Motor', 'Bicycle'];
     if (!allowedVehicles.includes((vehicleType || '').toString())) {
       return res.status(400).json({ message: 'vehicleType must be one of Car, Motor, Bicycle.' });
     }
 
-    const { deliveryFee, distanceKm, distanceInMeters } = await computeDeliveryFee({
+    const { deliveryFee, distanceKm, distanceInMeters,durationInSeconds } = await computeDeliveryFee({
       restaurantLocation,
       destinationLocation: destination,
       address,
       vehicleType,
-      apiKey,
     });
-
+  
     return res.status(200).json({
       status: 'success',
       data: {
         deliveryFee,
         distanceKm,
         distanceInMeters,
+        durationInSeconds,
         vehicleType,
       },
     });
