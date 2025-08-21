@@ -166,7 +166,7 @@ export const initializeChapaPayment = async ({ amount, currency, orderId, user }
    
     tx_ref: txRef,
     callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
-    return_url: 'https://gebeta-delivery1.onrender.com/payment-success', // Updated return URL
+    // return_url: 'https://gebeta-delivery1.onrender.com/payment-success', // Updated return URL
     customization: {
       title: 'Order Payment',
       description: `Payment for order ${txRef}`,
