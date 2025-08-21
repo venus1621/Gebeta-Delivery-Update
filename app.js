@@ -12,6 +12,7 @@ import deliverRoutes from './routes/deliverRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import reviewRouter from './routes/reviewRoutes.js';
 import globalErrorHandler from './controllers/errorController.js';
+import testRoute from './routes/testRoutes.js';
 import cors from 'cors';
 
 const app = express();
@@ -35,6 +36,7 @@ app.use(session({
   }
 }));
 app.use(morgan('dev'));
+app.use('/api/v1/test', testRoute);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/foods', foodRoutes);
 app.use('/api/v1/food-categories', categoryRoutes);
