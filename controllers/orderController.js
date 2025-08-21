@@ -160,7 +160,7 @@ const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
     first_name: user.firstName,
     mobile: user.phone || "N/A",
     tx_ref: txRef,
-    callback_url: "https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook",
+    callback_url: "https://gebeta-delivery1.onrender.com/api/v1/orders/chapa-webhook",
     return_url:"https://your-app.com/payment-success", // Replace with your frontend success page
     customization: {
       title: "Order Payment",
