@@ -184,7 +184,7 @@ export const initializeChapaPayment = async ({ amount, currency, orderId, user }
           Authorization: `Bearer ${chapaSecretKey}`,
           'Content-Type': 'application/json',
         },
-        timeout: 15000,
+        timeout: 35000,
       }
     );
       } catch (error) {
@@ -207,7 +207,7 @@ export const initializeChapaPayment = async ({ amount, currency, orderId, user }
         first_name: user.firstName,
         tx_ref: txRef,
         callback_url: 'https://gebeta-delivery1.onrender.com/api/v1/orders/chapaWebhook',
-        return_url: 'https://gebeta-delivery1.onrender.com/payment-success',
+        // return_url: 'https://gebeta-delivery1.onrender.com/payment-success',
         customization: {
           title: 'Order Payment',
           description: `Payment for order ${txRef}`,
@@ -222,7 +222,7 @@ export const initializeChapaPayment = async ({ amount, currency, orderId, user }
               Authorization: `Bearer ${chapaSecretKey}`,
               'Content-Type': 'application/json',
             },
-            timeout: 15000,
+            timeout: 35000,
           }
         );
       } else if (error.response?.status === 405 || error.response?.status === 404) {
@@ -247,7 +247,7 @@ export const initializeChapaPayment = async ({ amount, currency, orderId, user }
               Authorization: `Bearer ${chapaSecretKey}`,
               'Content-Type': 'application/json',
             },
-            timeout: 15000,
+            timeout: 35000,
           }
         );
       } else {
@@ -520,7 +520,7 @@ export const chapaWebhook = async (req, res, next) => {
         headers: {
           Authorization: `Bearer ${chapaSecretKey}`,
         },
-        timeout: 15000,
+        timeout: 35000,
       });
     } catch (error) {
       // Try fallback verification endpoint
@@ -531,7 +531,7 @@ export const chapaWebhook = async (req, res, next) => {
           headers: {
             Authorization: `Bearer ${chapaSecretKey}`,
           },
-          timeout: 15000,
+          timeout: 35000,
         });
       } else {
         throw error;
