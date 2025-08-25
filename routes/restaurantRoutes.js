@@ -51,4 +51,7 @@ router.route('/:id')
     restaurantController.deleteRestaurant
   );
 
+// Enhanced endpoint with menu and categories
+router.get('/:id/menu', restaurantController.getRestaurantWithMenu);
+
 export default router;

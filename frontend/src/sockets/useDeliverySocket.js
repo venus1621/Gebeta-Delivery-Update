@@ -9,11 +9,18 @@ export function useDeliverySocket({ vehicleMethod, onCooked, onAvailableCount, o
   const socketRef = useRef(null);
 
   useEffect(() => {
+    const STATIC_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTFhNWZjNTZlYWE3ODgxMDJmOGM5MyIsImlhdCI6MTc1NjEwNjIzMywiZXhwIjoxNzYzODgyMjMzfQ.YW0ukdUv5DJIs4MT9YMk-8IQPUXUlP_OHa4xutrrjy8";
     const socket = io(SOCKET_URL, {
       transports: ['websocket'],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
+      auth: {
+        token: STATIC_TOKEN,
+      },
+      extraHeaders: {
+        Authorization: `Bearer ${STATIC_TOKEN}`,
+      },
     });
     socketRef.current = socket;
 

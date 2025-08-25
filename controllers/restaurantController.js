@@ -8,6 +8,7 @@ import NodeGeocoder from 'node-geocoder';
 import cloudinary from '../utils/cloudinary.js'; 
 import streamifier from 'streamifier';
 import filterObj from '../utils/filterObj.js';
+import mongoose from 'mongoose';
 
 // Alias for top 5 rated restaurants
 export const aliasTopRestaurants = (req, res, next) => {
@@ -104,9 +105,156 @@ export const getRestaurant = catchAsync(async (req, res, next) => {
     return next(new AppError('No restaurant found with that ID', 404));
   }
 
+  // Get all food menus for this restaurant
+  const foodMenus = await mongoose.model('FoodMenu').find({ 
+    restaurantId: restaurant._id,
+    active: true 
+  });
+
+  // Get all foods from these menus
+  const menuIds = foodMenus.map(menu => menu._id);
+  const foods = await mongoose.model('Food').find({ 
+    menuId: { $in: menuIds },
+    status: 'Available'
+  }).populate('categoryId');
+
+  // Group foods by category
+  const foodsByCategory = {};
+  foods.forEach(food => {
+    const categoryName = food.categoryId?.categoryName || 'Uncategorized';
+    if (!foodsByCategory[categoryName]) {
+      foodsByCategory[categoryName] = {
+        categoryId: food.categoryId?._id,
+        categoryName: categoryName,
+        description: food.categoryId?.description || '',
+        foods: []
+      };
+    }
+    
+    foodsByCategory[categoryName].foods.push({
+      _id: food._id,
+      foodName: food.foodName,
+      price: food.price,
+      ingredients: food.ingredients,
+      instructions: food.instructions,
+      cookingTimeMinutes: food.cookingTimeMinutes,
+      rating: food.rating,
+      imageCover: food.imageCover,
+      isFeatured: food.isFeatured,
+      status: food.status,
+      menuId: food.menuId
+    });
+  });
+
+  // Convert to array and sort categories
+  const categories = Object.values(foodsByCategory).sort((a, b) => 
+    a.categoryName.localeCompare(b.categoryName)
+  );
+
+  // Sort foods within each category by name
+  categories.forEach(category => {
+    category.foods.sort((a, b) => a.foodName.localeCompare(b.foodName));
+  });
+
   res.status(200).json({
     status: 'success',
-    data: { restaurant }
+    data: { 
+      restaurant,
+      categories,
+      totalCategories: categories.length,
+      totalFoods: foods.length
+    }
+  });
+});
+
+// Alternative: Get restaurant with categories and foods using aggregation pipeline (more efficient)
+export const getRestaurantWithMenu = catchAsync(async (req, res, next) => {
+  const restaurant = await Restaurant.findById(req.params.id);
+
+  if (!restaurant) {
+    return next(new AppError('No restaurant found with that ID', 404));
+  }
+
+  // Use aggregation pipeline for better performance
+  const result = await mongoose.model('Food').aggregate([
+    // Match foods from this restaurant's menus
+    {
+      $lookup: {
+        from: 'foodmenus',
+        localField: 'menuId',
+        foreignField: '_id',
+        as: 'menu'
+      }
+    },
+    {
+      $unwind: '$menu'
+    },
+    {
+      $match: {
+        'menu.restaurantId': new mongoose.Types.ObjectId(req.params.id),
+        'menu.active': true,
+        status: 'Available'
+      }
+    },
+    // Lookup category information
+    {
+      $lookup: {
+        from: 'foodcategories',
+        localField: 'categoryId',
+        foreignField: '_id',
+        as: 'category'
+      }
+    },
+    {
+      $unwind: '$category'
+    },
+    // Group by category
+    {
+      $group: {
+        _id: '$categoryId',
+        categoryName: { $first: '$category.categoryName' },
+        categoryDescription: { $first: '$category.description' },
+        foods: {
+          $push: {
+            _id: '$_id',
+            foodName: '$foodName',
+            price: '$price',
+            ingredients: '$ingredients',
+            instructions: '$instructions',
+            cookingTimeMinutes: '$cookingTimeMinutes',
+            rating: '$rating',
+            imageCover: '$imageCover',
+            isFeatured: '$isFeatured',
+            status: '$status',
+            menuId: '$menuId'
+          }
+        }
+      }
+    },
+    // Sort categories and foods
+    {
+      $sort: { categoryName: 1 }
+    },
+    {
+      $addFields: {
+        foods: {
+          $sortArray: {
+            input: '$foods',
+            sortBy: { foodName: 1 }
+          }
+        }
+      }
+    }
+  ]);
+
+  res.status(200).json({
+    status: 'success',
+    data: { 
+      restaurant,
+      categories: result,
+      totalCategories: result.length,
+      totalFoods: result.reduce((sum, cat) => sum + cat.foods.length, 0)
+    }
   });
 });
 
