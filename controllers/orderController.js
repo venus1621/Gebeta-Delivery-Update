@@ -398,6 +398,19 @@ export const updateOrderStatus = async (req, res, next) => {
             grandTotal,
             createdAt: order.createdAt,
           });
+          
+          // Also broadcast updated count of available orders
+          try {
+            const availableCount = await Order.countDocuments({ 
+              orderStatus: 'Cooked', 
+              typeOfOrder: 'Delivery',
+              deliveryId: { $exists: false }
+            });
+            io.to('deliveries').emit('available-orders-count', { count: availableCount });
+          } catch (countError) {
+            console.warn('Failed to broadcast available orders count:', countError);
+          }
+          
           console.log(`✅ Broadcasted cooked order notification for order ${order._id}`);
         }
       }
@@ -660,6 +673,72 @@ export const getCookedOrders = async (req, res, next) => {
   } catch (error) {
     console.error('Error fetching cooked orders:', error.message);
     res.status(500).json({ message: 'Server error retrieving cooked orders' });
+  }
+};
+
+// Get all available cooked orders (without delivery assignment) for delivery app
+export const getAvailableCookedOrders = async (req, res, next) => {
+  try {
+    const availableOrders = await Order.find({ 
+      orderStatus: 'Cooked', 
+      typeOfOrder: 'Delivery',
+      deliveryId: { $exists: false } // No delivery person assigned yet
+    })
+      .populate('userId', 'firstName lastName phone')
+      .populate('restaurant_id', 'name location')
+      .populate('orderItems.foodId', 'foodName price')
+      .sort({ createdAt: 1 }); // Oldest first (FIFO)
+
+    const formattedOrders = availableOrders.map(order => ({
+      orderId: order._id,
+      order_id: order.order_id,
+      restaurantLocation: {
+        lat: order.restaurant_id?.location?.coordinates?.[1] || 0,
+        lng: order.restaurant_id?.location?.coordinates?.[0] || 0,
+      },
+      deliveryLocation: order.location,
+      deliveryFee: order.deliveryFee,
+      tip: order.tip,
+      grandTotal: order.totalPrice,
+      createdAt: order.createdAt,
+      customer: {
+        name: `${order.userId?.firstName || ''} ${order.userId?.lastName || ''}`.trim(),
+        phone: order.userId?.phone,
+      },
+      items: order.orderItems.map(item => ({
+        foodName: item.foodId?.foodName,
+        price: item.foodId?.price,
+        quantity: item.quantity,
+      })),
+    }));
+
+    res.status(200).json({
+      status: 'success',
+      results: formattedOrders.length,
+      data: formattedOrders
+    });
+  } catch (error) {
+    console.error('Error fetching available cooked orders:', error.message);
+    res.status(500).json({ message: 'Server error retrieving available cooked orders' });
+  }
+};
+
+// Get count of available cooked orders for delivery apps
+export const getAvailableCookedOrdersCount = async (req, res, next) => {
+  try {
+    const count = await Order.countDocuments({ 
+      orderStatus: 'Cooked', 
+      typeOfOrder: 'Delivery',
+      deliveryId: { $exists: false }
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: { count }
+    });
+  } catch (error) {
+    console.error('Error counting available cooked orders:', error.message);
+    res.status(500).json({ message: 'Server error counting available cooked orders' });
   }
 };
 

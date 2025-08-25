@@ -95,6 +95,18 @@ export const createDelivery = async (req, res, next) => {
           deliveryPerson: deliveryPersonId,
         });
         io.emit('order:status', { orderId, status: 'Delivering' });
+        
+        // Also broadcast updated count of available orders
+        try {
+          const availableCount = await Order.countDocuments({ 
+            orderStatus: 'Cooked', 
+            typeOfOrder: 'Delivery',
+            deliveryId: { $exists: false }
+          });
+          io.to('deliveries').emit('available-orders-count', { count: availableCount });
+        } catch (countError) {
+          console.warn('Failed to broadcast available orders count:', countError);
+        }
       }
     } catch {}
 
@@ -157,6 +169,18 @@ export const assignDeliveryToOrder = async (req, res, next) => {
           deliveryPerson: deliveryPersonId,
         });
         io.emit('order:status', { orderId, status: 'Delivering' });
+        
+        // Also broadcast updated count of available orders
+        try {
+          const availableCount = await Order.countDocuments({ 
+            orderStatus: 'Cooked', 
+            typeOfOrder: 'Delivery',
+            deliveryId: { $exists: false }
+          });
+          io.to('deliveries').emit('available-orders-count', { count: availableCount });
+        } catch (countError) {
+          console.warn('Failed to broadcast available orders count:', countError);
+        }
       }
     } catch {}
 
@@ -214,6 +238,18 @@ export const cancelDeliveryAssignment = async (req, res, next) => {
           deliveryPerson: deliveryPersonId,
         });
         io.emit('order:status', { orderId, status: 'Cooked' });
+        
+        // Also broadcast updated count of available orders
+        try {
+          const availableCount = await Order.countDocuments({ 
+            orderStatus: 'Cooked', 
+            typeOfOrder: 'Delivery',
+            deliveryId: { $exists: false }
+          });
+          io.to('deliveries').emit('available-orders-count', { count: availableCount });
+        } catch (countError) {
+          console.warn('Failed to broadcast available orders count:', countError);
+        }
       }
     } catch {}
 

@@ -21,11 +21,31 @@ const server = http.createServer(app);
 const io = initSocket(server);
 setIO(io);
 
+// Function to broadcast available orders count to delivery apps
+const broadcastAvailableOrdersCount = async () => {
+  try {
+    const Order = mongoose.model('Order');
+    const count = await Order.countDocuments({ 
+      orderStatus: 'Cooked', 
+      typeOfOrder: 'Delivery',
+      deliveryId: { $exists: false }
+    });
+    
+    io.to('deliveries').emit('available-orders-count', { count });
+  } catch (error) {
+    console.error('Error broadcasting available orders count:', error);
+  }
+};
+
 io.on('connection', (socket) => {
   console.log(`🔌 New client connected: ${socket.id}`);
 
   socket.on('joinRole', (role) => {
-    if (role === 'Delivery_Person') socket.join('deliveries');
+    if (role === 'Delivery_Person') {
+      socket.join('deliveries');
+      // Send current count when joining
+      broadcastAvailableOrdersCount();
+    }
     if (role === 'Admin' || role === 'Manager') socket.join('admin');
   });
 
@@ -36,6 +56,11 @@ io.on('connection', (socket) => {
     if (method === 'Car' || method === 'Motor' || method === 'Bicycle') {
       socket.join(`deliveries:${method}`);
     }
+  });
+
+  // Request current available orders count
+  socket.on('get-available-orders-count', () => {
+    broadcastAvailableOrdersCount();
   });
 
   socket.on('message', (data) => {

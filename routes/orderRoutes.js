@@ -6,6 +6,8 @@ import {
   updateOrderStatus,
   getCurrentOrders,
   getCookedOrders,
+  getAvailableCookedOrders,
+  getAvailableCookedOrdersCount,
   getOrdersByRestaurantId,
   chapaWebhook,
   verifyOrderDelivery,
@@ -29,10 +31,11 @@ router.post('/verify-delivery', protect, verifyOrderDelivery);
 // Restaurant and cooked orders
 router.get('/restaurant/:restaurantId/orders', protect, getOrdersByRestaurantId);
 router.get('/cooked', protect, getCookedOrders);
+router.get('/available-cooked', protect, getAvailableCookedOrders); // For delivery apps
+router.get('/available-cooked/count', protect, getAvailableCookedOrdersCount); // Count for delivery apps
 
 // Payment webhook
 router.post('/chapa-webhook', chapaWebhook);
 router.get("/chapa-webhook", chapaWebhook);
-
 
 export default router;
