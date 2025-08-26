@@ -1,22 +1,25 @@
 import { Server } from 'socket.io';
 
-let ioInstance = null;
+let io = null;
 
 export const initSocket = (server) => {
-  if (ioInstance) return ioInstance;
-  ioInstance = new Server(server, {
+  io = new Server(server, {
     cors: {
-      origin: '*',
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      origin: '*', // Adjust based on your frontend URL
+      methods: ['GET', 'POST'],
     },
   });
-  return ioInstance;
+  return io;
 };
 
-export const setIO = (io) => {
-  ioInstance = io;
+export const setIO = (ioInstance) => {
+  io = ioInstance;
 };
 
-export const getIO = () => ioInstance;
-
-
+export const getIO = () => {
+  if (!io) {
+    console.warn('Socket.IO not initialized');
+    return null;
+  }
+  return io;
+};

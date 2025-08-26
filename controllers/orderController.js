@@ -592,6 +592,49 @@ export const getMyOrders = async (req, res, next) => {
 };
 
 
+export const acceptOrder = async (req, res, next) => {
+  try {
+    const { orderId } = req.body;
+    const deliveryPersonId = req.user._id;
+
+    // Validate input
+    if (!orderId) {
+      return res.status(400).json({ error: 'Order ID is required.' });
+    }
+
+    // Find and update the order atomically
+    const order = await Order.findOneAndUpdate(
+      {
+        _id: orderId,
+        orderStatus: 'Cooked',
+        typeOfOrder: 'Delivery',
+        deliveryId: { $exists: false },
+      },
+      {
+        deliveryId: deliveryPersonId,
+        orderStatus: 'Delivering',
+        deliveryVerificationCode: generateVerificationCode(),
+      },
+      { new: true }
+    );
+
+    if (!order) {
+      return res.status(400).json({ error: 'Order is not available for acceptance.' });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: `Order ${order.order_id} accepted.`,
+     
+    });
+  } catch (error) {
+    console.error('Error accepting order:', error.message);
+    next(error);
+  }
+};
+
+
+
 
 // Update Order Status (Admin / Delivery Person)
 // export const updateOrderStatus = async (req, res, next) => {

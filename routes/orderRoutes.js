@@ -11,6 +11,7 @@ import {
   getOrdersByRestaurantId,
   chapaWebhook,
   verifyOrderDelivery,
+  acceptOrder
 } from '../controllers/orderController.js';
 import { protect } from '../controllers/authController.js'; // Auth middleware (JWT)
 
@@ -24,6 +25,7 @@ router.post('/estimate-delivery-fee', protect, estimateDeliveryFee);
 router.get('/my-orders', protect, getMyOrders);
 router.get('/current', protect, getCurrentOrders);
 
+router.post('/accept-for-delivery', protect, acceptOrder);
 // Order status and delivery
 router.patch('/:orderId/status', protect, updateOrderStatus);
 router.post('/verify-delivery', protect, verifyOrderDelivery);

@@ -74,6 +74,9 @@ const orderSchema = new mongoose.Schema(
     verification_code: {
       type: String,
     },
+    deliveryVerificationCode:{
+      type: String,
+    },
     transaction: {
       type: transactionSchema,
       required: true,
