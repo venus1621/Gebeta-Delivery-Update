@@ -470,47 +470,49 @@ export const chapaWebhook = async (req, res) => {
 
 export const verifyOrderDelivery = async (req, res, next) => {
   try {
-    const { orderId, verification_code } = req.body;
+    const { order_id, verification_code } = req.body;
     const deliveryPersonId = req.user._id;
 
-    if (!orderId || !verification_code) {
+    if (!order_id || !verification_code) {
       return res.status(400).json({
-        error: { message: 'Order ID and verification code are required.' },
+        error: { message: "Order ID and verification code are required." },
       });
     }
 
-    const order = await Order.findById(orderId);
+    // 🔹 Find order by custom order_id (not Mongo _id)
+    const order = await Order.findOne({ order_id });
     if (!order) {
-      return res.status(404).json({ error: { message: 'Order not found.' } });
+      return res.status(404).json({ error: { message: "Order not found." } });
     }
 
-    if (order.orderStatus !== 'Delivering') {
+    if (order.orderStatus !== "Delivering") {
       return res.status(400).json({
-        error: { message: 'Order must be in Delivering status to verify delivery.' },
+        error: { message: "Order must be in Delivering status to verify delivery." },
       });
     }
 
     if (order.verification_code !== verification_code) {
-      return res.status(400).json({ error: { message: 'Invalid verification code.' } });
+      return res.status(400).json({ error: { message: "Invalid verification code." } });
     }
 
     if (order.deliveryId && order.deliveryId.toString() !== deliveryPersonId.toString()) {
       return res.status(403).json({
-        error: { message: 'Only the assigned delivery person can verify this order.' },
+        error: { message: "Only the assigned delivery person can verify this order." },
       });
     }
 
-    order.orderStatus = 'Completed';
+    // ✅ Update order to completed
+    order.orderStatus = "Completed";
     order.verification_code = null; // Clear verification code after use
     await order.save();
 
     res.status(200).json({
-      status: 'success',
+      status: "success",
       data: { order },
-      message: 'Order delivery verified successfully.',
+      message: "Order delivery verified successfully.",
     });
   } catch (error) {
-    console.error('Error verifying order delivery:', error.message);
+    console.error("Error verifying order delivery:", error.message);
     next(error);
   }
 };
