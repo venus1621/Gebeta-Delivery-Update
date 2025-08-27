@@ -680,6 +680,10 @@ export const acceptOrder = async (req, res, next) => {
     res.status(200).json({
       status: 'success',
       message: `Order ${order.order_id} accepted.`,
+      data: {
+        orderCode: order.order_id,
+        pickUpverification: order.deliveryVerificationCode,
+      }
      
     });
   } catch (error) {
