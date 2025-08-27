@@ -615,6 +615,7 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
         orderType: order.typeOfOrder,
         orderStatus: order.orderStatus,
         orderId: order._id,
+        orderCode: order.order_id,
     
       };
     });
