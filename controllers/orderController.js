@@ -515,6 +515,59 @@ export const verifyOrderDelivery = async (req, res, next) => {
   }
 };
 
+export const pickUpOrder = async (req, res) => {
+  try {
+    const { order_id, deliveryVerificationCode } = req.body;
+    const deliveryPersonId = req.user._id; // from auth middleware (JWT)
+
+    // Validate input
+    if (!order_id || !deliveryVerificationCode) {
+      return res.status(400).json({
+        error: { message: "Order ID and delivery verification code are required." },
+      });
+    }
+
+    // Find order by custom order_id field
+    const order = await Order.findOne({ order_id });
+    if (!order || order.typeOfOrder !== "Delivery" ) {
+      return res.status(404).json({
+        error: { message: "Order not found." },
+      });
+    }
+
+    if(order.orderStatus==='Delivering' ){
+      return res.status(400).json({
+        error: { message: "Order has already been picked up." },
+      }); 
+    }
+    // Check verification code
+    if (order.deliveryVerificationCode !== deliveryVerificationCode) {
+      return res.status(400).json({
+        error: { message: "Invalid delivery verification code." },
+      });
+    }
+
+    // ✅ Update order status to Delivering
+    order.orderStatus = "Delivering";
+    order.deliveryId = deliveryPersonId; // link delivery person
+    order.pickedUpAt = new Date();
+
+    await order.save();
+
+    return res.status(200).json({
+      status: "success",
+      message: "Order status updated to Delivering.",
+      order,
+    });
+  } catch (err) {
+    console.error("Pickup Error:", err);
+    res.status(500).json({
+      error: { message: "Something went wrong while picking up the order." },
+    });
+  }
+};
+
+
 export const getOrdersByRestaurantId = async (req, res, next) => {
   try {
     const { restaurantId } = req.params;
@@ -612,8 +665,7 @@ export const acceptOrder = async (req, res, next) => {
       },
       {
         deliveryId: deliveryPersonId,
-        orderStatus: 'Delivering',
-        deliveryVerificationCode: generateVerificationCode(),
+       deliveryVerificationCode: generateVerificationCode(),
       },
       { new: true }
     );

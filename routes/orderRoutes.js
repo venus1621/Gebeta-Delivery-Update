@@ -11,7 +11,8 @@ import {
   getOrdersByRestaurantId,
   chapaWebhook,
   verifyOrderDelivery,
-  acceptOrder
+  acceptOrder,
+  pickUpOrder
 } from '../controllers/orderController.js';
 import { protect } from '../controllers/authController.js'; // Auth middleware (JWT)
 
@@ -29,6 +30,7 @@ router.post('/accept-for-delivery', protect, acceptOrder);
 // Order status and delivery
 router.patch('/:orderId/status', protect, updateOrderStatus);
 router.post('/verify-delivery', protect, verifyOrderDelivery);
+router.post('/verify-restaurant-pickup', protect, pickUpOrder);
 
 // Restaurant and cooked orders
 router.get('/restaurant/:restaurantId/orders', protect, getOrdersByRestaurantId);
