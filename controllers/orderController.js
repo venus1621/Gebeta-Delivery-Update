@@ -198,7 +198,7 @@ export const placeOrder = async (req, res, next) => {
       DATABASE: process.env.DATABASE ? 'Configured' : 'Not configured'
     });
 
-    const { orderItems, typeOfOrder, vehicleType, destinationLocation, tip } = req.body;
+    const { orderItems, typeOfOrder, vehicleType, destinationLocation, tip ,description} = req.body;
     const userId = req.user._id;
 
     if (!orderItems || orderItems.length === 0 || !typeOfOrder) {
@@ -281,6 +281,7 @@ export const placeOrder = async (req, res, next) => {
       tip: tipAmount,
       totalPrice,
       typeOfOrder,
+      description,
       deliveryVehicle: vehicleType || null,
       restaurant_id,
       location: typeOfOrder === 'Delivery' ? destinationLocation : null,
@@ -585,7 +586,7 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
     
     })
       .populate('userId', 'firstName phone')
-      .populate('orderItems.foodId', 'foodName price')
+      .populate('orderItems.foodId', 'foodName price ')
       .sort({ createdAt: -1 });
 
     if (!orders || orders.length === 0) {
@@ -610,14 +611,15 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
           quantity: item.quantity,
           price: item.foodId?.price,
         })),
+       
         totalFoodPrice,
         orderDate: order.createdAt,
         orderType: order.typeOfOrder,
         orderStatus: order.orderStatus,
         orderId: order._id,
         orderCode: order.order_id,
+        description:order.description,
         deloveryVerification: order.deliveryVerificationCode 
-    
       };
     });
 

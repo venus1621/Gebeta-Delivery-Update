@@ -45,6 +45,8 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ['Car', 'Motor', 'Bicycle'],
     },
+    description: { type: String },
+    // 🔗 Reference to the restaurant
     restaurant_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Restaurant',
