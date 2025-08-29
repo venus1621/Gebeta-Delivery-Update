@@ -582,7 +582,7 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
     const orders = await Order.find({
       restaurant_id: restaurantId,
       'transaction.Status': 'Paid',
-      orderStatus: { $in: ['Pending', 'Preparing', 'Cooked'] },
+    
     })
       .populate('userId', 'firstName phone')
       .populate('orderItems.foodId', 'foodName price')
