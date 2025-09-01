@@ -254,3 +254,129 @@ export const getUserLocation = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+export const editAddress = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const addressId = req.params.addressId;
+
+  const user = await User.findById(userId);
+  if (!user) return next(new AppError('User not found', 404));
+
+  const address = user.addresses.id(addressId);
+  if (!address) return next(new AppError('Address not found', 404));
+
+  // Update fields from body
+  const { name, label, additionalInfo, coordinates, isDefault } = req.body;
+
+  if (name) address.name = name;
+  if (label) address.label = label;
+  if (additionalInfo) address.additionalInfo = additionalInfo;
+  if (coordinates) {
+    if (coordinates.lat) address.coordinates.lat = coordinates.lat;
+    if (coordinates.lng) address.coordinates.lng = coordinates.lng;
+  }
+
+  // If this address is set as default, unset all others
+  if (isDefault) {
+    user.addresses.forEach(addr => (addr.isDefault = false));
+    address.isDefault = true;
+  } else if (isDefault === false) {
+    address.isDefault = false;
+  }
+
+  await user.save({ validateBeforeSave: false });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Address updated successfully',
+    address
+  });
+});
+
+// DELETE /api/v1/users/address/:addressId
+export const deleteAddress = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const addressId = req.params.addressId;
+
+  const user = await User.findById(userId);
+  if (!user) return next(new AppError('User not found', 404));
+
+  // Remove the address using pull
+  const address = user.addresses.id(addressId);
+  if (!address) return next(new AppError('Address not found', 404));
+
+  // Pull the subdocument from the addresses array
+  user.addresses.pull(address._id);
+
+  await user.save({ validateBeforeSave: false });
+
+  res.status(204).json({
+    status: 'success',
+    message: 'Address deleted successfully'
+  });
+});
+
+
+// PATCH /api/v1/users/address/:addressId/setDefault
+export const setDefaultAddress = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const addressId = req.params.addressId;
+
+  const user = await User.findById(userId);
+  if (!user) return next(new AppError('User not found', 404));
+
+  const address = user.addresses.id(addressId);
+  if (!address) return next(new AppError('Address not found', 404));
+
+  // Unset all addresses
+  user.addresses.forEach(addr => (addr.isDefault = false));
+
+  // Set this one as default
+  address.isDefault = true;
+
+  await user.save({ validateBeforeSave: false });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Default address updated successfully',
+    address
+  });
+});
+
+// POST /api/v1/users/address/current
+export const addCurrentLocationAsAddress = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const { label = 'Home', additionalInfo = '', isDefault = false } = req.body;
+
+  const { lat, lng } = req.body.coordinates || {};
+  if (!lat || !lng) {
+    return next(new AppError('Latitude and longitude are required', 400));
+  }
+
+  const user = await User.findById(userId);
+  if (!user) return next(new AppError('User not found', 404));
+
+  // If this address is set as default, unset all others
+  if (isDefault) {
+    user.addresses.forEach(addr => (addr.isDefault = false));
+  }
+
+  // Save current location as an address
+  const newAddress = {
+    name: 'Current Location',
+    label,
+    additionalInfo,
+    isDefault,
+    coordinates: { lat, lng }
+  };
+
+  user.addresses.push(newAddress);
+  await user.save({ validateBeforeSave: false });
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Current location saved as address',
+    address: newAddress,
+    addresses: user.addresses
+  });
+});

@@ -23,7 +23,11 @@ import {
   addAddressToUser,
   getMyAddresses,
   updateUserLocation,
-  getUserLocation
+  getUserLocation,
+  editAddress,
+  deleteAddress,
+  setDefaultAddress,
+  addCurrentLocationAsAddress
 } from '../controllers/userController.js';
 
 import upload from '../utils/upload.js';
@@ -59,19 +63,21 @@ router.post('/resetPasswordOTP', resetPasswordWithOTP);
 // 🔐 Protected Routes (Require Authentication)
 // =======================
 
-// Apply protect middleware to all routes below
 router.use(protect);
 
+// Update user location
 router.patch('/:id/updateLocation', updateUserLocation);
-router.get('/:id/location',  getUserLocation);
+
+// Get user location
+router.get('/:id/location', getUserLocation);
+
 // Update current user's password
 router.patch('/updateMyPassword', updatePassword);
 
 // Update current user's profile info
 router.patch('/updateMe', upload.single('profilePicture'), updateMe);
+
 // Allow delivery users to set delivery method
-// Expected body: { deliveryMethod: 'Car' | 'Motor' | 'Bicycle' }
-// Uses same controller as updateMe, but separate route for clarity in clients
 router.patch('/me/delivery-method', (req, res, next) => {
   req.body = { deliveryMethod: req.body.deliveryMethod };
   next();
@@ -80,11 +86,27 @@ router.patch('/me/delivery-method', (req, res, next) => {
 // Soft delete current user's account
 router.delete('/deleteMe', deleteMe);
 
-// Add an address to current user
+// =======================
+// 🏠 Address Routes
+// =======================
+
+// Add an address
 router.post('/addAddress', addAddressToUser);
 
+// Add current geolocation as address
+router.post('/addCurrentLocation', addCurrentLocationAsAddress);
 
-router.get('/myAddresses', getMyAddresses); 
+// Get all addresses of current user
+router.get('/myAddresses', getMyAddresses);
+
+// Edit an address
+router.patch('/address/:addressId', editAddress);
+
+// Delete an address
+router.delete('/address/:addressId', deleteAddress);
+
+// Set an address as default
+router.patch('/address/:addressId/setDefault', setDefaultAddress);
 
 // =======================
 // 🛡️ Admin-Only Routes
