@@ -26,6 +26,7 @@ export const createMenu = catchAsync(async (req, res, next) => {
   await menu.populate('restaurantId');
 
   res.status(201).json({
+    
     status: 'success',
     data: menu
   });
