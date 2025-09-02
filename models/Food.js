@@ -10,11 +10,7 @@ const foodSchema = new mongoose.Schema({
   imageCover: { type: String },
   isFeatured: { type: Boolean, default: false },
 
-  categoryId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'FoodCategory',
-    required: true
-  },
+  
   menuId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'FoodMenu',
