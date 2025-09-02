@@ -27,7 +27,7 @@ export const getFoodsByMenuId = catchAsync(async (req, res, next) => {
     return next(new AppError('Menu ID is required.', 400));
   }
 
-  const foods = await Food.find({ menuId }).populate('categoryId', 'categoryName');
+  const foods = await Food.find({ menuId });
 
   if (!foods.length) {
     return next(new AppError('No foods found for the given menu ID.', 404));
