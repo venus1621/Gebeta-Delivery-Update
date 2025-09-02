@@ -19,7 +19,7 @@ const uploadFromBuffer = (fileBuffer, folder = 'food_images') => {
   });
 };
 
-
+// Get foods by menuId
 export const getFoodsByMenuId = catchAsync(async (req, res, next) => {
   const { menuId } = req.params;
 
@@ -60,7 +60,7 @@ const checkManagerAccess = async (menuId, user) => {
   const restaurant = await Restaurant.findById(menu.restaurantId);
   if (!restaurant) throw new AppError('Restaurant not found', 404);
 
-  // if ( restaurant.managerId.toString() !== user.id) {
+  // if (restaurant.managerId.toString() !== user.id) {
   //   throw new AppError('Not authorized to access this menu', 403);
   // }
 
@@ -85,7 +85,6 @@ export const getAllFoods = catchAsync(async (req, res, next) => {
   const queryObj = {};
 
   if (req.query.menuId) queryObj.menuId = req.query.menuId;
-  if (req.query.categoryId) queryObj.categoryId = req.query.categoryId;
 
   if (req.query.restaurantId) {
     const menus = await FoodMenu.find({ restaurantId: req.query.restaurantId });
@@ -95,8 +94,7 @@ export const getAllFoods = catchAsync(async (req, res, next) => {
   if (req.query.status) queryObj.status = req.query.status;
 
   const foods = await Food.find(queryObj)
-    .populate('menuId')
-    .populate('categoryId');
+    .populate('menuId');
 
   res.status(200).json({
     status: 'success',
@@ -108,8 +106,7 @@ export const getAllFoods = catchAsync(async (req, res, next) => {
 // Get single food item
 export const getFood = catchAsync(async (req, res, next) => {
   const food = await Food.findById(req.params.id)
-    .populate('menuId')
-    .populate('categoryId');
+    .populate('menuId');
 
   if (!food) return next(new AppError('Food not found', 404));
 
