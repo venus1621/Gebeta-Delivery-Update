@@ -8,7 +8,7 @@ import catchAsync from '../utils/catchAsync.js';
 import cloudinary from '../utils/cloudinary.js';
 import streamifier from 'streamifier';
 
-// Upload image buffer to Cloudinary
+// Upload image buffer to Cloudinary  
 const uploadFromBuffer = (fileBuffer, folder = 'food_images') => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream({ folder }, (error, result) => {
