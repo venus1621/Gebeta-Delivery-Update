@@ -393,6 +393,7 @@ export const updateOrderStatus = async (req, res, next) => {
             orderId: order._id,
             order_id: order.order_id,
             restaurantLocation,
+            restaurant_name: restaurant.name,
             deliveryLocation,
             deliveryFee: order.deliveryFee,
             tip: order.tip,
