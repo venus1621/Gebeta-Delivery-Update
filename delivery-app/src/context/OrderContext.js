@@ -49,7 +49,7 @@ export const OrderProvider = ({ children }) => {
         console.log('✅ Connected to socket server');
         
         // Join the deliveries room
-        socketRef.current.emit('join-deliveries');
+        socketRef.current.emit('joinRole', 'Delivery_Person');
       });
 
       socketRef.current.on('disconnect', () => {
@@ -90,6 +90,24 @@ export const OrderProvider = ({ children }) => {
         );
       });
 
+      // Listen for order accepted events
+      socketRef.current.on('order:accepted', (orderData) => {
+        console.log('✅ Order accepted event received:', orderData);
+        
+        // Remove from available orders
+        setAvailableOrders(prev => prev.filter(order => order.id !== orderData.orderId));
+        
+        // Update count
+        setAvailableOrdersCount(prev => Math.max(0, prev - 1));
+        
+        // Show notification if this wasn't accepted by us
+        Alert.alert(
+          'Order Accepted',
+          `Order ${orderData.order_id} has been accepted by another delivery person.`,
+          [{ text: 'OK', style: 'default' }]
+        );
+      });
+
       // Listen for available orders count updates
       socketRef.current.on('available-orders-count', ({ count }) => {
         console.log('📊 Available orders count updated:', count);
@@ -126,33 +144,45 @@ export const OrderProvider = ({ children }) => {
 
   const acceptOrder = async (orderId) => {
     try {
-      const response = await orderService.acceptOrder(orderId, token);
-      
-      if (response.status === 'success') {
-        // Remove from available orders
-        setAvailableOrders(prev => prev.filter(order => order.id !== orderId));
-        
-        // Add to accepted orders
-        const acceptedOrder = availableOrders.find(order => order.id === orderId);
-        if (acceptedOrder) {
-          const orderWithDetails = {
-            ...acceptedOrder,
-            status: 'Accepted',
-            orderCode: response.data.orderCode,
-            pickUpverification: response.data.pickUpverification
-          };
-          
-          setAcceptedOrders(prev => [...prev, orderWithDetails]);
-          setCurrentOrder(orderWithDetails);
+      // Use socket-based order acceptance
+      return new Promise((resolve, reject) => {
+        if (!socketRef.current) {
+          reject(new Error('Socket not connected'));
+          return;
         }
-        
-        // Update count
-        setAvailableOrdersCount(prev => Math.max(0, prev - 1));
-        
-        return { success: true, data: response.data };
-      } else {
-        return { success: false, error: response.message };
-      }
+
+        // Get user ID from token (you might need to decode the JWT token)
+        const user = JSON.parse(atob(token.split('.')[1]));
+        const deliveryPersonId = user._id;
+
+        socketRef.current.emit('acceptOrder', { orderId, deliveryPersonId }, (response) => {
+          if (response.status === 'success') {
+            // Remove from available orders
+            setAvailableOrders(prev => prev.filter(order => order.id !== orderId));
+            
+            // Add to accepted orders
+            const acceptedOrder = availableOrders.find(order => order.id === orderId);
+            if (acceptedOrder) {
+              const orderWithDetails = {
+                ...acceptedOrder,
+                status: 'Accepted',
+                orderCode: response.data.orderCode,
+                pickUpverification: response.data.pickUpVerification
+              };
+              
+              setAcceptedOrders(prev => [...prev, orderWithDetails]);
+              setCurrentOrder(orderWithDetails);
+            }
+            
+            // Update count
+            setAvailableOrdersCount(prev => Math.max(0, prev - 1));
+            
+            resolve({ success: true, data: response.data });
+          } else {
+            reject(new Error(response.message || 'Failed to accept order'));
+          }
+        });
+      });
     } catch (error) {
       console.error('Accept order error:', error);
       return { success: false, error: error.message };

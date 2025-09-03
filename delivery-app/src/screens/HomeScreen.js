@@ -29,6 +29,7 @@ const HomeScreen = ({ navigation }) => {
     acceptedOrders,
     availableOrdersCount,
     refreshAvailableOrders,
+    acceptOrder,
   } = useOrders();
   
   const [refreshing, setRefreshing] = useState(false);
@@ -38,6 +39,29 @@ const HomeScreen = ({ navigation }) => {
     setRefreshing(true);
     await refreshAvailableOrders();
     setRefreshing(false);
+  };
+
+  const handleAcceptOrder = async (order) => {
+    try {
+      const result = await acceptOrder(order.id);
+      if (result.success) {
+        Alert.alert(
+          'Order Accepted! ✅',
+          `Order ${order.order_id} has been accepted successfully.`,
+          [
+            { 
+              text: 'View Details', 
+              onPress: () => navigation.navigate('OrderDetails', { order: result.data }) 
+            },
+            { text: 'OK', style: 'default' }
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to accept order');
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to accept order');
+    }
   };
 
   const handleLogout = () => {
@@ -99,7 +123,7 @@ const HomeScreen = ({ navigation }) => {
             key={order.id}
             order={order}
             type="available"
-            onAccept={() => navigation.navigate('OrderDetails', { order })}
+            onAccept={() => handleAcceptOrder(order)}
           />
         ))
       )}
