@@ -769,7 +769,11 @@ export const getCookedOrders = async (req, res, next) => {
         name: order.restaurant_id?.name,
         location: order.restaurant_id?.location
       },
-      orderLocation: order.location
+      orderLocation: order.location,
+      deliveryFee: order.deliveryFee,
+      tip: order.tip,
+      totalPrice: order.totalPrice,
+      
     }));
 
     res.status(200).json({
