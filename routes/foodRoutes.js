@@ -38,3 +38,4 @@ router
   .delete(protect, restrictTo('Admin', 'Manager'), deleteFood);
 
 export default router;
+ 

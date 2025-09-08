@@ -84,6 +84,7 @@ io.on('connection', (socket) => {
           deliveryId: { $exists: false },
         },
         {
+          orderStatus:'Delivering',
           deliveryId: deliveryPersonId,
           deliveryVerificationCode: generateVerificationCode(),
         },

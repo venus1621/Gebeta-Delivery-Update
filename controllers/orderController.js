@@ -764,6 +764,7 @@ export const getCookedOrders = async (req, res, next) => {
     // Map the response to include only desired fields
     const formattedOrders = cookedOrders.map(order => ({
       userPhone: order.userId?.phone,
+      orderId: order._id,
       restaurant: {
         name: order.restaurant_id?.name,
         location: order.restaurant_id?.location
