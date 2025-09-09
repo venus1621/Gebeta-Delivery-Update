@@ -947,7 +947,7 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
 
     res.status(200).json({
       status: 'success',
-      results: orders.length,
+      
       data: orders,
     });
   } catch (error) {
