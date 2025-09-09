@@ -12,7 +12,8 @@ import {
   chapaWebhook,
   verifyOrderDelivery,
   acceptOrder,
-  pickUpOrder
+  pickUpOrder,
+  getOrdersByDeliveryMan
 } from '../controllers/orderController.js';
 import { protect } from '../controllers/authController.js'; // Auth middleware (JWT)
 
@@ -41,5 +42,7 @@ router.get('/available-cooked/count', protect, getAvailableCookedOrdersCount); /
 // Payment webhook
 router.post('/chapa-webhook', chapaWebhook);
 router.get("/chapa-webhook", chapaWebhook);
+
+router.get("/get-orders-by-DeliveryMan", protect, getOrdersByDeliveryMan);
 
 export default router;
