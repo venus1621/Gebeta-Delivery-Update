@@ -497,11 +497,11 @@ export const verifyOrderDelivery = async (req, res, next) => {
       return res.status(400).json({ error: { message: "Invalid verification code." } });
     }
 
-    if (order.deliveryId && order.deliveryId.toString() !== deliveryPersonId.toString()) {
-      return res.status(403).json({
-        error: { message: "Only the assigned delivery person can verify this order." },
-      });
-    }
+    // if (order.deliveryId && order.deliveryId.toString() !== deliveryPersonId.toString()) {
+    //   return res.status(403).json({
+    //     error: { message: "Only the assigned delivery person can verify this order." },
+    //   });
+    // }
 
     // ✅ Update order to completed
     order.orderStatus = "Completed";
