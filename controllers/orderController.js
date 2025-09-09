@@ -939,6 +939,7 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
       totalPrice: order.totalPrice,
       orderStatus: order.orderStatus,
       verificationCode: order.deliveryVerificationCode,
+      orderCode: order.order_id,
     }));
 
     res.status(200).json({
