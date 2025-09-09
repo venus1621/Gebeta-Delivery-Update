@@ -482,7 +482,7 @@ export const verifyOrderDelivery = async (req, res, next) => {
     }
 
     // 🔹 Find order by custom order_id (not Mongo _id)
-    const order = await Order.findOne({ order_id });
+    const order = await Order.findById(order_id);
     if (!order) {
       return res.status(404).json({ error: { message: "Order not found." } });
     }
