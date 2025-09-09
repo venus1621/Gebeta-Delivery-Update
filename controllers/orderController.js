@@ -756,7 +756,10 @@ export const getCurrentOrders = async (req, res) => {
 
 export const getCookedOrders = async (req, res, next) => {
   try {
-    const cookedOrders = await Order.find({ orderStatus: 'Cooked' })
+    const cookedOrders = await Order.find({ 
+      orderStatus: 'Cooked',
+      deliveryId: { $exists: false } // Exclude orders that already have deliveryId
+    })
       .populate('userId', 'phone') // only populate phone number
       .populate('restaurant_id', 'name location') // only populate name and location
       .sort({ updatedAt: -1 });
@@ -773,7 +776,6 @@ export const getCookedOrders = async (req, res, next) => {
       deliveryFee: order.deliveryFee,
       tip: order.tip,
       totalPrice: order.totalPrice,
-      
     }));
 
     res.status(200).json({
