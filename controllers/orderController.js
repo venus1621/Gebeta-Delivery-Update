@@ -662,7 +662,24 @@ export const acceptOrder = async (req, res, next) => {
       return res.status(400).json({ error: 'Order ID is required.' });
     }
 
-    // Find and update the order atomically
+    // Check if delivery person already has an active order
+    const existingOrder = await Order.findOne({
+      deliveryId: deliveryPersonId,
+      orderStatus: { $nin: ['Completed', 'Cancelled'] }, // still active
+    });
+
+    if (existingOrder) {
+      return res.status(400).json({
+        error:
+          'You already have an active order. Complete or cancel it before accepting a new one.',
+        activeOrder: {
+          orderId: existingOrder._id,
+          status: existingOrder.orderStatus,
+        },
+      });
+    }
+
+    // Find and update the new order atomically
     const order = await Order.findOneAndUpdate(
       {
         _id: orderId,
@@ -672,13 +689,15 @@ export const acceptOrder = async (req, res, next) => {
       },
       {
         deliveryId: deliveryPersonId,
-       deliveryVerificationCode: generateVerificationCode(),
+        deliveryVerificationCode: generateVerificationCode(),
       },
       { new: true }
     );
 
     if (!order) {
-      return res.status(400).json({ error: 'Order is not available for acceptance.' });
+      return res
+        .status(400)
+        .json({ error: 'Order is not available for acceptance.' });
     }
 
     res.status(200).json({
@@ -686,9 +705,8 @@ export const acceptOrder = async (req, res, next) => {
       message: `Order ${order.order_id} accepted.`,
       data: {
         orderCode: order.order_id,
-        pickUpverification: order.deliveryVerificationCode,
-      }
-     
+        pickUpVerification: order.deliveryVerificationCode,
+      },
     });
   } catch (error) {
     console.error('Error accepting order:', error.message);
