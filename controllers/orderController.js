@@ -917,15 +917,17 @@ export const estimateDeliveryFee = async (req, res) => {
 };
 export const getOrdersByDeliveryMan = async (req, res, next) => {
   
-  
-    const deliveryPersonId = req.user._id;
+  try {
+    const deliveryPersonId = req.user._id; // from auth middleware 
     console.log('Fetching orders for delivery person:', deliveryPersonId);
-
-const orders = await Order.find({ deliveryId: deliveryPersonId });
-  // .populate("userId", "phone")
-  // .populate("restaurant_id", "name location")
-  // .sort({ updatedAt: -1 });
-
+    // Find all orders assigned to this delivery person
+    const orders = await Order.findOne({
+      
+deliveryId: deliveryPersonId,
+    })
+      .populate('userId', 'phone') // only phone
+      .populate('restaurant_id', 'name location') // only name and location
+      .sort({ updatedAt: -1 });
     console.log(orders);
     // // Format to match cookedOrders style
     // const formattedOrders = orders.map(order => ({
@@ -949,5 +951,10 @@ const orders = await Order.find({ deliveryId: deliveryPersonId });
       
       data: orders,
     });
-  
+  } catch (error) {
+    console.error('Error fetching delivery man orders:', error.message);
+    res.status(500).json({ message: 'Server error retrieving delivery orders' });
+  }
 };
+
+
