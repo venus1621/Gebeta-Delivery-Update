@@ -921,7 +921,7 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
     const deliveryPersonId = req.user._id; // from auth middleware 
     console.log('Fetching orders for delivery person:', deliveryPersonId);
     // Find all orders assigned to this delivery person
-    const orders = await Order.findOne({
+    const orders = await Order.find({
       
 deliveryId: deliveryPersonId,
     })
