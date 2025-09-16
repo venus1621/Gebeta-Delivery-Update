@@ -654,8 +654,8 @@ export const getMyOrders = async (req, res, next) => {
 
 export const acceptOrder = async (req, res, next) => {
   try {
-    const { orderId , deliveryPersonId} = req.body;
-    
+    const { orderId } = req.body;
+    const deliveryPersonId = req.user._id;
 
     // Validate input
     if (!orderId) {
