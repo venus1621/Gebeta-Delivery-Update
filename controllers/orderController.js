@@ -478,7 +478,6 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
         orderCode: order.orderCode,
         description:order.description,
         
-        
       };
     });
 

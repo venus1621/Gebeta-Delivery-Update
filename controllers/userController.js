@@ -380,4 +380,3 @@ export const addCurrentLocationAsAddress = catchAsync(async (req, res, next) => 
     addresses: user.addresses
   });
 });
-5
