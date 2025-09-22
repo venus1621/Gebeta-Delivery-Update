@@ -1,9 +1,11 @@
+import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import Food from '../models/Food.js';
 import Restaurant from '../models/restaurantModel.js';
 import User from '../models/userModel.js';
 import axios from 'axios';
 import { getIO } from '../utils/socket.js';
+import { computeDeliveryFee } from '../utils/computeDeliveryFee.js';
 
 // Generate a unique order_id (e.g., ORD-XXXXXX)
 const generateOrderId = async () => {
@@ -22,7 +24,6 @@ export const generateVerificationCode = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Initialize Chapa Direct Charge payment
 // export const initializeChapaPayment = async ({ amount, currency, mobile, orderId, payment_method, user, useHostedCheckout = false }) => {
 //   const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
 //   if (!chapaSecretKey) throw new Error('CHAPA_SECRET_KEY is not configured');
@@ -95,46 +96,6 @@ export const generateVerificationCode = () => {
 //   };
 // };
 
-const computeDeliveryFee = async ({ restaurantLocation, destinationLocation, vehicleType }) => {
-  if (!destinationLocation?.lat || !destinationLocation?.lng) {
-    throw new Error('Delivery coordinates are required.');
-  }
-
-  const origins = `${restaurantLocation.lng},${restaurantLocation.lat}`; // OSRM uses lng,lat
-  const destinations = `${destinationLocation.lng},${destinationLocation.lat}`;
-  const mode = vehicleType === 'Bicycle' ? 'bike' : 'driving'; // OSRM modes: driving, bike, foot
-  const osrmUrl = `https://router.project-osrm.org/route/v1/${mode}/${origins};${destinations}?overview=false`;
-  const osrmResponse = await axios.get(osrmUrl);
-  const distanceInMeters = osrmResponse?.data?.routes?.[0]?.distance;
-  const durationInSeconds = osrmResponse?.data?.routes?.[0]?.duration;
-  if (!distanceInMeters) {
-    throw new Error('Failed to calculate delivery distance.');
-  }
-  const distanceKm = distanceInMeters / 1000;
-
-  const rateConfig = {
-    Car: {
-      base: parseFloat(process.env.CAR_BASE_FARE || '150'),
-      perKm: parseFloat(process.env.CAR_PER_KM || '13'),
-    },
-    Motor: {
-      base: parseFloat(process.env.MOTOR_BASE_FARE || '100'),
-      perKm: parseFloat(process.env.MOTOR_PER_KM || '10'),
-    },
-    Bicycle: {
-      base: parseFloat(process.env.BICYCLE_BASE_FARE || '50'),
-      perKm: parseFloat(process.env.BICYCLE_PER_KM || '10'),
-    },
-  };
-  const selectedRate = rateConfig[vehicleType];
-  if (!selectedRate) {
-    throw new Error('Invalid vehicle type.');
-  }
-  const rawFee = selectedRate.base + selectedRate.perKm * distanceKm;
-  const deliveryFee = Math.ceil(rawFee);
-
-  return { deliveryFee, distanceKm,durationInSeconds, distanceInMeters, rate: selectedRate, destination: destinationLocation };
-};
 
 const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
   const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
@@ -191,185 +152,106 @@ const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
 
 export const placeOrder = async (req, res, next) => {
   try {
-    // Log environment variables for debugging
-    console.log('Environment check:', {
-      CHAPA_SECRET_KEY: process.env.CHAPA_SECRET_KEY ? 'Configured' : 'Not configured',
-      NODE_ENV: process.env.NODE_ENV,
-      DATABASE: process.env.DATABASE ? 'Configured' : 'Not configured'
-    });
-
-    const { orderItems, typeOfOrder, vehicleType, destinationLocation, tip ,description} = req.body;
+    const { orderItems, typeOfOrder, vehicleType, destinationLocation, tip, description } = req.body;
     const userId = req.user._id;
 
-    if (!orderItems || orderItems.length === 0 || !typeOfOrder) {
-      return res.status(400).json({ error: { message: 'No order items or type of order provided.' } });
-    }
-
-    // Validate tip
-    const tipAmount = typeof tip === 'number' && tip >= 0 ? tip : 0;
-
-    let foodTotal = 0;
-    let restaurant_id = null;
-    let restaurantLocation = null;
-
-    // Validate items and compute food total
-    const foodIds = orderItems.map(item => item.foodId);
-    const foods = await Food.find({ _id: { $in: foodIds } }).populate('menuId');
-    const foodMap = new Map(foods.map(food => [food._id.toString(), food]));
-
-    for (const item of orderItems) {
-      const food = foodMap.get(item.foodId.toString());
-      if (!food) {
-        return res.status(404).json({ error: { message: `Food item not found: ${item.foodId}` } });
-      }
-
-      if (!food.menuId?.restaurantId) {
-        return res.status(500).json({ error: { message: `Invalid menu data for food item: ${item.foodId}` } });
-      }
-
-      const currentRestaurantId = food.menuId.restaurantId.toString();
-      const restaurant = await Restaurant.findById(currentRestaurantId);
-      const currentRestaurantLocation = {
-        lat: restaurant.location.coordinates[1],
-        lng: restaurant.location.coordinates[0],
-      };
-
-      if (!restaurant_id) {
-        restaurant_id = currentRestaurantId;
-        restaurantLocation = currentRestaurantLocation;
-      } else if (restaurant_id !== currentRestaurantId) {
-        return res.status(400).json({ error: { message: 'All items must be from the same restaurant.' } });
-      }
-
-      foodTotal += food.price * item.quantity;
-    }
-
-    // Calculate delivery fee for delivery orders
-    let deliveryFee = 0;
-    let computedDistanceKm = 0;
-
-    if (typeOfOrder === 'Delivery') {
-      const normalizedVehicle = (vehicleType || '').toString();
-      const allowedVehicles = ['Car', 'Motor', 'Bicycle'];
-      if (!allowedVehicles.includes(normalizedVehicle)) {
-        return res.status(400).json({
-          error: { message: `vehicleType must be one of ${allowedVehicles.join(', ')}.` },
-        });
-      }
-
-      if (!destinationLocation || typeof destinationLocation.lat !== 'number' || typeof destinationLocation.lng !== 'number') {
-        return res.status(400).json({ error: { message: 'Valid destination location coordinates are required for delivery.' } });
-      }
-
-      const { deliveryFee: computedFee, distanceKm } = await computeDeliveryFee({
-        restaurantLocation,
-        destinationLocation,
-        vehicleType: normalizedVehicle,
-      });
-      deliveryFee = computedFee;
-      computedDistanceKm = distanceKm;
-    }
-
-    const totalPrice = foodTotal + deliveryFee + tipAmount;
-
-    // Create order
+    // ✅ Validate & compute with normalized items using the model's static method
+    const {
+      orderItems: normalizedOrderItems,
+      foodTotal,
+      restaurantId,
+      deliveryFee,
+      distanceKm,
+      tip: tipAmount,
+      restaurantLocation,
+      destinationLocation: validatedDestination,
+      deliveryVehicle: validatedDeliveryVehicle,
+      restaurantName,
+      totalPrice,
+      typeOfOrder: validatedTypeOfOrder,
+      description: validatedDescription,
+      orderCode,
+      userVerificationCode,
+    } = await Order.validateAndComputeOrder({
+      orderItems,
+      typeOfOrder,
+      deliveryVehicle: vehicleType,
+      destinationLocation,
+      tip,
+      description,  
+    });
+    // --- Create order with normalized items ---
     const order = await Order.create({
       userId,
-      orderItems,
-      foodTotal,
-      deliveryFee,
-      tip: tipAmount,
-      totalPrice,
-      typeOfOrder,
-      description,
-      deliveryVehicle: vehicleType || null,
-      restaurant_id,
-      location: typeOfOrder === 'Delivery' ? destinationLocation : null,
-      order_id: null,
-      verification_code: null,
+      orderItems: normalizedOrderItems, // ✅ safe items from model validation
+      foodTotal, // Already Decimal128 from model
+      deliveryFee, // Already Decimal128 from model
+      tip: tipAmount, // Already Decimal128 from model
+      totalPrice, // Already Decimal128 from model
+      typeOfOrder: validatedTypeOfOrder,
+      description: validatedDescription,
+      deliveryVehicle: validatedTypeOfOrder === "Delivery" ? validatedDeliveryVehicle : null,
+      restaurantId,
+      destinationLocation: validatedTypeOfOrder === "Delivery" ? validatedDestination : null,
+      restaurantLocation,
+      distanceKm,
+      orderCode,
+      userVerificationCode,
       transaction: {
-        Total_Price: totalPrice.toString(),
-        Status: 'Pending',
+        totalPrice,
+        status: "Pending",
       },
     });
+    
+    console.log('Order created:', order);
 
-    // Validate user information for Chapa Hosted Checkout
+    // --- Validate user info for Chapa ---
     const user = await User.findById(userId);
     if (!user.firstName || !user.lastName || !user.email) {
       return res.status(400).json({
         error: { message: 'User first name, last name, and email are required for payment processing.' },
       });
     }
-
-    console.log(`Placing order for user: ${user.firstName} (${user.email}) with total price: ${totalPrice}`);
-
-    // Initialize Chapa payment (Hosted Checkout)
-    console.log('Initializing Chapa payment...');
+    // --- Initialize Chapa payment ---
     const paymentInit = await initializeChapaPayment({
       amount: totalPrice,
       currency: 'ETB',
       orderId: order._id,
       user,
     });
-    
-    
 
     res.status(201).json({
       status: 'success',
       data: {
-       
         payment: paymentInit,
-        // summary: {
-        //   foodTotal,
-        //   deliveryFee,
-        //   tip: tipAmount,
-        //   totalPrice,
-        //   vehicleType: vehicleType || null,
-        //   distanceKm: computedDistanceKm,
-        // },
       },
     });
   } catch (error) {
     console.error('Error placing order:', error.message);
-    console.error('Error stack:', error.stack);
-    
-    // Log additional error details for debugging
-    if (error.response) {
-      console.error('Error response details:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data,
-        headers: error.response.headers
-      });
-    }
-    
     next(error);
   }
 };
 
 export const updateOrderStatus = async (req, res, next) => {
   try {
+    // Validate input
     const { orderId, status } = req.body;
-    const allowedStatuses = ['Pending', 'Preparing', 'Cooked', 'Delivering', 'Completed', 'Cancelled'];
-
-    if (!orderId || !allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        error: {
-          message:
-            'Valid orderId and status (Pending, Preparing, Cooked, Delivering, Completed, Cancelled) are required.',
-        },
-      });
+    if (!orderId || !status) {
+      return res.status(400).json({ error: { message: 'orderId and status are required.' } });
     }
 
-    const order = await Order.findById(orderId);
+    // Use findOneAndUpdate to respect schema validation
+    const order = await Order.findOneAndUpdate(
+      { _id: orderId },
+      { $set: { orderStatus: status } },
+      { new: true, runValidators: true }
+    );
+
     if (!order) {
       return res.status(404).json({ error: { message: 'Order not found.' } });
     }
 
-    order.orderStatus = status;
-    await order.save();
-
-    // 🔹 Only broadcast when the order is cooked and requires delivery
+    // Handle delivery notification for "Cooked" status
     if (status === 'Cooked' && order.typeOfOrder === 'Delivery') {
       const restaurant = await Restaurant.findById(order.restaurant_id);
       if (!restaurant) {
@@ -379,11 +261,13 @@ export const updateOrderStatus = async (req, res, next) => {
           lat: restaurant.location.coordinates[1],
           lng: restaurant.location.coordinates[0],
         };
-
         const deliveryLocation = order.location;
 
-        // 🔹 Calculate grand total = food total + delivery fee + tip
-        const grandTotal = Number(order.deliveryFee) + Number(order.tip || 0);
+        // Calculate grand total including foodTotal
+        const grandTotal =
+          parseFloat(order.foodTotal.toString()) +
+          parseFloat(order.deliveryFee.toString()) +
+          parseFloat(order.tip?.toString() || '0');
 
         const io = getIO();
         if (!io) {
@@ -391,28 +275,28 @@ export const updateOrderStatus = async (req, res, next) => {
         } else {
           io.to('deliveries').emit('order:cooked', {
             orderId: order._id,
-            order_id: order.order_id,
+            order_code: order.order_code, // Fixed: Use order_code
             restaurantLocation,
             restaurant_name: restaurant.name,
             deliveryLocation,
-            deliveryFee: order.deliveryFee,
-            tip: order.tip,
-            grandTotal,
+            deliveryFee: parseFloat(order.deliveryFee.toString()),
+            tip: parseFloat(order.tip?.toString() || '0'),
+            grandTotal: grandTotal.toFixed(2),
             createdAt: order.createdAt,
           });
-          
-          // Also broadcast updated count of available orders
+
+          // Broadcast available orders count
           try {
-            const availableCount = await Order.countDocuments({ 
-              orderStatus: 'Cooked', 
+            const availableCount = await Order.countDocuments({
+              orderStatus: 'Cooked',
               typeOfOrder: 'Delivery',
-              deliveryId: { $exists: false }
+              deliveryId: { $exists: false },
             });
             io.to('deliveries').emit('available-orders-count', { count: availableCount });
           } catch (countError) {
             console.warn('Failed to broadcast available orders count:', countError);
           }
-          
+
           console.log(`✅ Broadcasted cooked order notification for order ${order._id}`);
         }
       }
@@ -421,6 +305,7 @@ export const updateOrderStatus = async (req, res, next) => {
     res.status(200).json({
       status: 'success',
       message: `Order status updated to ${status}.`,
+      data: { order },
     });
   } catch (error) {
     console.error('Error updating order status:', error.message);
@@ -454,10 +339,8 @@ export const chapaWebhook = async (req, res) => {
     }
 
     // 3. Update order payment status
-    order.transaction.Status = status === "success" ? "Paid" : "Failed";
-    order.transaction.ref_id = ref_id;
-    order.order_id = await generateOrderId();
-    order.verification_code = generateVerificationCode();
+    order.transaction.status = status === "success" ? "Paid" : "Failed";
+    order.transaction.refId = ref_id;
     await order.save();
 
     console.log("Order updated successfully:", order._id);
@@ -472,102 +355,150 @@ export const chapaWebhook = async (req, res) => {
 
 export const verifyOrderDelivery = async (req, res, next) => {
   try {
+    // Validate input
     const { order_id, verification_code } = req.body;
-    const deliveryPersonId = req.user._id;
+    const deliveryPersonId = req.user?._id;
 
     if (!order_id || !verification_code) {
       return res.status(400).json({
-        error: { message: "Order ID and verification code are required." },
+        error: { message: 'Order ID and verification code are required.' },
       });
     }
-
-    // 🔹 Find order by custom order_id (not Mongo _id)
-    const order = await Order.findById(order_id);
-    if (!order) {
-      return res.status(404).json({ error: { message: "Order not found." } });
-    }
-
-    if (order.orderStatus !== "Delivering") {
+    if (typeof order_id !== 'string' || typeof verification_code !== 'string') {
       return res.status(400).json({
-        error: { message: "Order must be in Delivering status to verify delivery." },
+        error: { message: 'Order ID and verification code must be strings.' },
+      });
+    }
+    if (!deliveryPersonId) {
+      return res.status(401).json({
+        error: { message: 'Unauthorized: Delivery person ID required.' },
       });
     }
 
-    if (order.verification_code !== verification_code) {
-      return res.status(400).json({ error: { message: "Invalid verification code." } });
+    // Find and update order atomically
+    const updatedOrder = await Order.findOneAndUpdate(
+      {
+        order_code: order_id,
+        orderStatus: 'Delivering', // Ensure correct status
+        deliveryId: deliveryPersonId, // Enforce delivery person match
+        user_verification_code: verification_code, // Verify code
+      },
+      {
+        $set: {
+          orderStatus: 'Completed',
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedOrder) {
+      // Determine specific error
+      const order = await Order.findOne({ order_code: order_id });
+      if (!order) {
+        return res.status(404).json({ error: { message: 'Order not found.' } });
+      }
+      if (order.orderStatus !== 'Delivering') {
+        return res.status(400).json({
+          error: { message: 'Order must be in Delivering status to verify delivery.' },
+        });
+      }
+      if (order.deliveryId.toString() !== deliveryPersonId.toString()) {
+        return res.status(403).json({
+          error: { message: 'Only the assigned delivery person can verify this order.' },
+        });
+      }
+      if (order.user_verification_code !== verification_code) {
+        return res.status(400).json({ error: { message: 'Invalid verification code.' } });
+      }
+      return res.status(500).json({ error: { message: 'Failed to update order.' } });
     }
 
-    // if (order.deliveryId && order.deliveryId.toString() !== deliveryPersonId.toString()) {
-    //   return res.status(403).json({
-    //     error: { message: "Only the assigned delivery person can verify this order." },
-    //   });
-    // }
-
-    // ✅ Update order to completed
-    order.orderStatus = "Completed";
-    order.verification_code = null; // Clear verification code after use
-    await order.save();
-
-    res.status(200).json({
-      status: "success",
-      data: { order },
-      message: "Order delivery verified successfully.",
-    });
-  } catch (error) {
-    console.error("Error verifying order delivery:", error.message);
-    next(error);
-  }
-};
-
-export const pickUpOrder = async (req, res) => {
-  try {
-    const { order_id, deliveryVerificationCode } = req.body;
-    // const deliveryPersonId = req.user._id; // from auth middleware (JWT)
-
-    // Validate input
-    if (!order_id || !deliveryVerificationCode) {
-      return res.status(400).json({
-        error: { message: "Order ID and delivery verification code are required." },
-      });
-    }
-
-    // Find order by custom order_id field
-    const order = await Order.findOne({ order_id });
-    if (!order || order.typeOfOrder !== "Delivery" ) {
-      return res.status(404).json({
-        error: { message: "Order not found." },
-      });
-    }
-
-    if(order.orderStatus==='Delivering' ){
-      return res.status(400).json({
-        error: { message: "Order has already been picked up." },
-      }); 
-    }
-    // Check verification code
-    if (order.deliveryVerificationCode !== deliveryVerificationCode) {
-      return res.status(400).json({
-        error: { message: "Invalid delivery verification code." },
-      });
-    }
-
-    // ✅ Update order status to Delivering
-    order.orderStatus = "Delivering";
-    // order.deliveryId = deliveryPersonId; // link delivery person
-    order.pickedUpAt = new Date();
-
-    await order.save();
+    
 
     return res.status(200).json({
-      status: "success",
-      message: "Order status updated to Delivering.",
-      order,
+      status: 'success',
+      message: 'Order delivery verified successfully.',
+      data: { order: updatedOrder },
+    });
+  } catch (error) {
+    console.error(`Error verifying order delivery for order_code ${order_id}:`, error.message);
+    next(error);
+  }
+}
+export const pickUpOrder = async (req, res, next) => {
+  try {
+    // Validate input
+    const { orderId, pickupVerificationCode } = req.body;
+    if (!orderId || !pickupVerificationCode) {
+      return res.status(400).json({
+        error: { message: 'Order ID and pickup verification code are required.' },
+      });
+    }
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res.status(400).json({
+        error: { message: 'Invalid order ID format.' },
+      });
+    }
+    if (typeof pickupVerificationCode !== 'string') {
+      return res.status(400).json({
+        error: { message: 'Pickup verification code must be a string.' },
+      });
+    }
+
+    // Find order
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        error: { message: 'Order not found.' },
+      });
+    }
+    if (order.typeOfOrder !== 'Delivery') {
+      return res.status(400).json({
+        error: { message: 'Order is not a delivery order.' },
+      });
+    }
+    if (order.orderStatus === 'Delivering') {
+      return res.status(400).json({
+        error: { message: 'Order has already been picked up.' },
+      });
+    }
+    if (order.orderStatus !== 'Cooked') {
+      return res.status(400).json({
+        error: { message: 'Order must be in Cooked status to be picked up.' },
+      });
+    }
+
+    // Check verification code
+    if (order.deliveryVerificationCode !== pickupVerificationCode) {
+      return res.status(400).json({
+        error: { message: 'Invalid pickup verification code.' },
+      });
+    }
+
+    // Update order
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: orderId },
+      {
+        $set: {
+          orderStatus: 'Delivering',
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({
+        error: { message: 'Order not found during update.' },
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Order status updated to Delivering.',
     });
   } catch (err) {
-    console.error("Pickup Error:", err);
-    res.status(500).json({
-      error: { message: "Something went wrong while picking up the order." },
-    });
+    console.error('Pickup Error:', err.message);
+    next(err); // Pass to error-handling middleware
   }
 };
 
@@ -637,20 +568,24 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
 // Get my Orders
 export const getMyOrders = async (req, res, next) => {
   try {
-    const orders = await Order.find({ userId: req.user._id })
-      .populate('orderItems.foodId')
-      .populate('restaurant_id', 'name location');
+    const userId = req.user._id;
+
+    const orders = await Order.find({ userId })
+      .populate("restaurant_id", "name location") // only restaurant context  
     res.status(200).json({
-      status: 'success',
+      status: "success",
       results: orders.length,
       data: { orders },
     });
   } catch (error) {
-    console.error('Error getting orders:', error);
+    console.error("Error getting user orders:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to fetch orders",
+    });
     next(error);
   }
 };
-
 
 export const acceptOrder = async (req, res, next) => {
   try {
@@ -715,37 +650,6 @@ export const acceptOrder = async (req, res, next) => {
 };
 
 
-
-
-// Update Order Status (Admin / Delivery Person)
-// export const updateOrderStatus = async (req, res, next) => {
-//   try {
-//     const { orderId } = req.params;
-//     const { status } = req.body;
-
-//     const order = await Order.findById(orderId);
-//     if (!order) {
-//       return res.status(404).json({ message: 'Order not found' });
-//     }
-
-//     order.orderStatus = status;
-
-//     // Optional: mark transaction as paid when completed
-//     if (status === 'Completed') {
-//       order.transaction.Status = 'Paid';
-//     }
-
-//     await order.save();
-
-//     res.status(200).json({
-//       status: 'success',
-//       data: { order },
-//     });
-//   } catch (error) {
-//     console.error('Error updating order status:', error);
-//     next(error);
-//   }
-// };
 export const getCurrentOrders = async (req, res) => {
   try {
     const userId = req.user.id;

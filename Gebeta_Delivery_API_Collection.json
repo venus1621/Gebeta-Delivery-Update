@@ -1,0 +1,925 @@
+{
+  "info": {
+    "name": "Gebeta Delivery API",
+    "description": "Complete API collection for Gebeta Delivery application",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://gebeta-delivery1.onrender.com",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Signup (Send OTP)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+251912345678\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/signup"
+          }
+        },
+        {
+          "name": "Verify Signup OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+251912345678\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/verifySignupOTP"
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+251912345678\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/login"
+          }
+        },
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+251912345678\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/sendOTP"
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+251912345678\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/verifyOTP"
+          }
+        },
+        {
+          "name": "Request Password Reset OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+251912345678\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/requestResetOTP"
+          }
+        },
+        {
+          "name": "Reset Password with OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+251912345678\",\n  \"code\": \"123456\",\n  \"password\": \"newpassword123\",\n  \"passwordConfirm\": \"newpassword123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/resetPasswordOTP"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Update My Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"newpassword123\",\n  \"passwordConfirm\": \"newpassword123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/updateMyPassword"
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "name", "value": "John Doe", "type": "text"},
+                {"key": "email", "value": "john@example.com", "type": "text"},
+                {"key": "profilePicture", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/users/updateMe"
+          }
+        },
+        {
+          "name": "Delete My Account",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users/deleteMe"
+          }
+        },
+        {
+          "name": "Update User Location",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 9.0192,\n  \"longitude\": 38.7525\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/:id/updateLocation"
+          }
+        },
+        {
+          "name": "Get User Location",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users/:id/location"
+          }
+        },
+        {
+          "name": "Set Delivery Method",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryMethod\": \"bike\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/me/delivery-method"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Address Management",
+      "item": [
+        {
+          "name": "Add Address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Home\",\n  \"address\": \"Bole, Addis Ababa\",\n  \"latitude\": 9.0192,\n  \"longitude\": 38.7525,\n  \"isDefault\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/addAddress"
+          }
+        },
+        {
+          "name": "Add Current Location as Address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Current Location\",\n  \"latitude\": 9.0192,\n  \"longitude\": 38.7525\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/addCurrentLocation"
+          }
+        },
+        {
+          "name": "Get My Addresses",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users/myAddresses"
+          }
+        },
+        {
+          "name": "Edit Address",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Home\",\n  \"address\": \"Updated Bole, Addis Ababa\",\n  \"latitude\": 9.0192,\n  \"longitude\": 38.7525\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/address/:addressId"
+          }
+        },
+        {
+          "name": "Delete Address",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users/address/:addressId"
+          }
+        },
+        {
+          "name": "Set Default Address",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users/address/:addressId/setDefault"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restaurants",
+      "item": [
+        {
+          "name": "Get All Restaurants",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/restaurants"
+          }
+        },
+        {
+          "name": "Get Restaurant by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/restaurants/:id"
+          }
+        },
+        {
+          "name": "Get Restaurant with Menu",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/restaurants/:id/menu"
+          }
+        },
+        {
+          "name": "Get Restaurants with Distance",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/restaurants/distance-from-coords?lat=9.0192&lng=38.7525"
+          }
+        },
+        {
+          "name": "Create Restaurant (Admin/Manager)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "name", "value": "New Restaurant", "type": "text"},
+                {"key": "description", "value": "Great food", "type": "text"},
+                {"key": "address", "value": "Bole, Addis Ababa", "type": "text"},
+                {"key": "latitude", "value": "9.0192", "type": "text"},
+                {"key": "longitude", "value": "38.7525", "type": "text"},
+                {"key": "phone", "value": "+251912345678", "type": "text"},
+                {"key": "image", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/restaurants"
+          }
+        },
+        {
+          "name": "Update Restaurant (Admin/Manager)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "name", "value": "Updated Restaurant", "type": "text"},
+                {"key": "description", "value": "Updated description", "type": "text"},
+                {"key": "image", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/restaurants/:id"
+          }
+        },
+        {
+          "name": "Delete Restaurant (Admin/Manager)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/restaurants/:id"
+          }
+        },
+        {
+          "name": "Get Restaurants by Manager",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/restaurants/by-manager/:managerId"
+          }
+        },
+        {
+          "name": "Assign Restaurant Manager (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurantId\": \"restaurant_id_here\",\n  \"managerId\": \"manager_id_here\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/restaurants/assign-manager"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Food Categories",
+      "item": [
+        {
+          "name": "Get All Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/food-categories"
+          }
+        },
+        {
+          "name": "Get Category by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/food-categories/:id"
+          }
+        },
+        {
+          "name": "Create Category (Admin/Manager)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ethiopian Food\",\n  \"description\": \"Traditional Ethiopian dishes\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/food-categories"
+          }
+        },
+        {
+          "name": "Update Category (Admin/Manager)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Category\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/food-categories/:id"
+          }
+        },
+        {
+          "name": "Delete Category (Admin/Manager)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/food-categories/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Food Menus",
+      "item": [
+        {
+          "name": "Get All Menus",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/food-menus"
+          }
+        },
+        {
+          "name": "Get Menu by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/food-menus/:id"
+          }
+        },
+        {
+          "name": "Create Menu (Admin/Manager)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Breakfast Menu\",\n  \"description\": \"Morning meals\",\n  \"restaurantId\": \"restaurant_id_here\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/food-menus"
+          }
+        },
+        {
+          "name": "Update Menu (Admin/Manager)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Menu\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/food-menus/:id"
+          }
+        },
+        {
+          "name": "Delete Menu (Admin/Manager)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/food-menus/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Foods",
+      "item": [
+        {
+          "name": "Get All Foods",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/foods"
+          }
+        },
+        {
+          "name": "Get Food by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/foods/:id"
+          }
+        },
+        {
+          "name": "Get Foods by Menu ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/foods/by-menu/:menuId"
+          }
+        },
+        {
+          "name": "Create Food (Admin/Manager)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "name", "value": "Injera with Doro Wot", "type": "text"},
+                {"key": "description", "value": "Traditional Ethiopian dish", "type": "text"},
+                {"key": "price", "value": "150", "type": "text"},
+                {"key": "categoryId", "value": "category_id_here", "type": "text"},
+                {"key": "menuId", "value": "menu_id_here", "type": "text"},
+                {"key": "image", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/foods"
+          }
+        },
+        {
+          "name": "Update Food (Admin/Manager)",
+          "request": {
+            "method": "PATCH",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {"key": "name", "value": "Updated Food Name", "type": "text"},
+                {"key": "price", "value": "200", "type": "text"},
+                {"key": "image", "type": "file", "src": []}
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/foods/:id"
+          }
+        },
+        {
+          "name": "Delete Food (Admin/Manager)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/foods/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Place Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"foodId\": \"food_id_here\",\n      \"quantity\": 2,\n      \"price\": 150\n    }\n  ],\n  \"deliveryAddress\": {\n    \"name\": \"Home\",\n    \"address\": \"Bole, Addis Ababa\",\n    \"latitude\": 9.0192,\n    \"longitude\": 38.7525\n  },\n  \"paymentMethod\": \"chapa\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/place-order"
+          }
+        },
+        {
+          "name": "Estimate Delivery Fee",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"restaurantLocation\": {\n    \"latitude\": 9.0192,\n    \"longitude\": 38.7525\n  },\n  \"deliveryLocation\": {\n    \"latitude\": 9.0250,\n    \"longitude\": 38.7600\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/estimate-delivery-fee"
+          }
+        },
+        {
+          "name": "Get My Orders",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/orders/my-orders"
+          }
+        },
+        {
+          "name": "Get Current Orders",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/orders/current"
+          }
+        },
+        {
+          "name": "Update Order Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"preparing\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/:orderId/status"
+          }
+        },
+        {
+          "name": "Accept Order for Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"order_id_here\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/accept-for-delivery"
+          }
+        },
+        {
+          "name": "Verify Order Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"order_id_here\",\n  \"deliveryPhoto\": \"base64_image_string\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/verify-delivery"
+          }
+        },
+        {
+          "name": "Verify Restaurant Pickup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"order_id_here\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/verify-restaurant-pickup"
+          }
+        },
+        {
+          "name": "Get Orders by Restaurant",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/orders/restaurant/:restaurantId/orders"
+          }
+        },
+        {
+          "name": "Get Cooked Orders",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/orders/cooked"
+          }
+        },
+        {
+          "name": "Get Available Cooked Orders",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/orders/available-cooked"
+          }
+        },
+        {
+          "name": "Get Available Cooked Orders Count",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/orders/available-cooked/count"
+          }
+        },
+        {
+          "name": "Get Orders by Delivery Man",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/orders/get-orders-by-DeliveryMan"
+          }
+        },
+        {
+          "name": "Chapa Webhook (POST)",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"payment.completed\",\n  \"data\": {\n    \"tx_ref\": \"order_123\",\n    \"status\": \"successful\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/orders/chapa-webhook"
+          }
+        },
+        {
+          "name": "Chapa Webhook (GET)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders/chapa-webhook"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Deliveries",
+      "item": [
+        {
+          "name": "Get All Deliveries",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/deliveries"
+          }
+        },
+        {
+          "name": "Assign Delivery to Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"order_id_here\",\n  \"deliveryManId\": \"delivery_man_id_here\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/deliveries"
+          }
+        },
+        {
+          "name": "Cancel Delivery Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryId\": \"delivery_id_here\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/deliveries/cancel"
+          }
+        },
+        {
+          "name": "Get Delivery by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/deliveries/:id"
+          }
+        },
+        {
+          "name": "Update Delivery",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"delivered\",\n  \"deliveryTime\": \"2024-01-15T10:30:00Z\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/deliveries/:id"
+          }
+        },
+        {
+          "name": "Delete Delivery",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/deliveries/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Get All Reviews",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/reviews"
+          }
+        },
+        {
+          "name": "Get Reviews by Restaurant",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/restaurants/:restaurantId/reviews"
+          }
+        },
+        {
+          "name": "Create Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"review\": \"Great food and service!\",\n  \"restaurantId\": \"restaurant_id_here\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/reviews"
+          }
+        },
+        {
+          "name": "Get Review by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/reviews/:id"
+          }
+        },
+        {
+          "name": "Update Review",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"review\": \"Updated review text\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/reviews/:id"
+          }
+        },
+        {
+          "name": "Delete Review",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/reviews/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin - User Management",
+      "item": [
+        {
+          "name": "Get All Users (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users"
+          }
+        },
+        {
+          "name": "Create User (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"phone\": \"+251912345678\",\n  \"password\": \"password123\",\n  \"passwordConfirm\": \"password123\",\n  \"role\": \"Customer\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users"
+          }
+        },
+        {
+          "name": "Get User by ID (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users/:id"
+          }
+        },
+        {
+          "name": "Update User (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Authorization", "value": "Bearer {{token}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"role\": \"Manager\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/users/:id"
+          }
+        },
+        {
+          "name": "Delete User (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+            "url": "{{baseUrl}}/api/v1/users/:id"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Test Routes",
+      "item": [
+        {
+          "name": "Test Socket",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/test/test-socket"
+          }
+        }
+      ]
+    }
+  ]
+}
+
