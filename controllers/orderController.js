@@ -49,6 +49,7 @@ const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
     first_name: user.firstName,
     mobile: user.phone || "N/A",
     tx_ref: txRef,
+    
     callback_url: "https://gebeta-delivery1.onrender.com/api/v1/orders/chapa-webhook",
     // return_url:"https://your-app.com/payment-success", // Replace with your frontend success page
     customization: {
@@ -129,9 +130,6 @@ export const placeOrder = async (req, res, next) => {
         status: "Pending",
       },
     });
-    
-    console.log('Order created:', order);
-
     // --- Validate user info for Chapa ---
     const user = await User.findById(userId);
     if (!user.firstName || !user.lastName || !user.email) {
@@ -244,9 +242,9 @@ export const chapaWebhook = async (req, res) => {
   try {
     const { trx_ref, ref_id, status } = req.query;
 
-    console.log("Webhook received:", { trx_ref, ref_id, status });
+    console.log("Chapa Webhook received:", { trx_ref, ref_id, status });
 
-    // 1. Verify with Chapa (optional but safer)
+    // 1. Verify with Chapa
     const chapaSecretKey = process.env.CHAPA_SECRET_KEY;
     const verifyUrl = `https://api.chapa.co/v1/transaction/verify/${trx_ref}`;
 
@@ -257,28 +255,35 @@ export const chapaWebhook = async (req, res) => {
     if (verifyRes.data.status !== "success") {
       return res.status(400).json({ message: "Verification failed" });
     }
+    console.log("Chapa verification successful:", verifyRes.data);
 
-    // 2. Find order
+    // 2. Extract orderId
     const orderId = trx_ref.replace("order-", "");
-    const order = await Order.findById(orderId);
+    console.log("Extracted orderId:", orderId);
+
+    // 3. Find order (bypassing Paid filter)
+    const order = await Order.findById(orderId, null, { bypassPaidFilter: true });
+    console.log("Order lookup result:", order?._id);
+
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // 3. Update order payment status
+    // 4. Update order transaction
     order.transaction.status = status === "success" ? "Paid" : "Failed";
     order.transaction.refId = ref_id;
     await order.save();
 
     console.log("Order updated successfully:", order._id);
 
-    // 4. Respond OK to Chapa
+    // 5. Respond OK
     return res.status(200).json({ message: "Webhook processed successfully" });
   } catch (err) {
     console.error("Webhook error:", err.message);
     return res.status(500).json({ message: "Server error processing webhook" });
   }
 };
+
 
 export const verifyOrderDelivery = async (req, res, next) => {
   try {

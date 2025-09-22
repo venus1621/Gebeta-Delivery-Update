@@ -112,13 +112,13 @@ const generateVerificationCode = () => {
   return String(Math.floor(100000 + Math.random() * 900000));
 };
 
-const generateOrderCode= async () => {
+const generateOrderCode = async function() {
   const prefix = 'ORD';
   const randomNum = Math.floor(100000 + Math.random() * 900000); // 6-digit number
   const orderId = `${prefix}-${randomNum}`;
-  const existingOrder = await Order.findOne({ order_id: orderId });
+  const existingOrder = await this.findOne({ orderCode: orderId });
   if (existingOrder) {
-    return generateOrderId(); // Recursively generate until unique
+    return generateOrderCode.call(this); // Recursively generate until unique
   }
   return orderId;
 };
@@ -254,7 +254,7 @@ orderSchema.statics.validateAndComputeOrder = async function ({
     totalPrice: mongoose.Types.Decimal128.fromString(totalPrice.toFixed(2)),
     typeOfOrder,
     description,
-    orderCode: generateOrderCode(),
+    orderCode: await generateOrderCode.call(this),
     userVerificationCode: generateVerificationCode(),
   };
 };
@@ -323,9 +323,12 @@ orderSchema.pre("find", function (next) {
 });
 
 // (Optional) also for findOne
-orderSchema.pre("findOne", function (next) {
-  this.where({ "transaction.status": "Paid" });
+// --- Pre-find hook: ignore unpaid orders (except when explicitly bypassed)
+orderSchema.pre(["find", "findOne"], function (next) {
+  if (!this.getOptions().bypassPaidFilter) {
+    this.where({ "transaction.status": "Paid" });
+  }
   next();
-});
+});;
 
 export default mongoose.model("Order", orderSchema);
