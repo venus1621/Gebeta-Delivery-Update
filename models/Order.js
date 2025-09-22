@@ -329,6 +329,6 @@ orderSchema.pre(["find", "findOne"], function (next) {
     this.where({ "transaction.status": "Paid" });
   }
   next();
-});;
+});
 
 export default mongoose.model("Order", orderSchema);

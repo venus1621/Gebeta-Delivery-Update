@@ -445,12 +445,9 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
 
     // 🔹 Query with conditions: Paid transactions + allowed order statuses
     const orders = await Order.find({
-      restaurant_id: restaurantId,
-      'transaction.Status': 'Paid',
-    
+      restaurantId: restaurantId,
     })
       .populate('userId', 'firstName phone')
-      .populate('orderItems.foodId', 'foodName price ')
       .sort({ createdAt: -1 });
 
     if (!orders || orders.length === 0) {
@@ -460,30 +457,28 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
       });
     }
 
+    console.log(orders);
     // 🔹 Format response
     const formattedOrders = orders.map(order => {
-      const totalFoodPrice = order.orderItems.reduce((sum, item) => {
-        const price = item.foodId?.price || 0;
-        return sum + price * item.quantity;
-      }, 0);
+
 
       return {
         userName: order.userId?.firstName,
         phone: order.userId?.phone,
         items: order.orderItems.map(item => ({
-          foodName: item.foodId?.foodName,
+          foodName: item.name,
           quantity: item.quantity,
-          price: item.foodId?.price,
+          price: Number(item.price),
         })),
-       
-        totalFoodPrice,
+        totalFoodPrice: Number(order.foodTotal),
         orderDate: order.createdAt,
         orderType: order.typeOfOrder,
         orderStatus: order.orderStatus,
         orderId: order._id,
-        orderCode: order.order_id,
+        orderCode: order.orderCode,
         description:order.description,
-        deloveryVerification: order.deliveryVerificationCode 
+        
+        
       };
     });
 
