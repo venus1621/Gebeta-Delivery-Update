@@ -111,9 +111,17 @@ const orderSchema = new mongoose.Schema(
 const generateVerificationCode = () => {
   return String(Math.floor(100000 + Math.random() * 900000));
 };
-const generateOrderCode = () => {
-  return 'ORD-' + Math.floor(100000 + Math.random() * 900000);
-}
+
+const generateOrderCode= async () => {
+  const prefix = 'ORD';
+  const randomNum = Math.floor(100000 + Math.random() * 900000); // 6-digit number
+  const orderId = `${prefix}-${randomNum}`;
+  const existingOrder = await Order.findOne({ order_id: orderId });
+  if (existingOrder) {
+    return generateOrderId(); // Recursively generate until unique
+  }
+  return orderId;
+};
 // --- Static method: validate & compute order ---
 // --- Static method: validate & compute order ---
 // --- Static method: validate & compute order ---
