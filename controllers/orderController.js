@@ -241,7 +241,6 @@ export const updateOrderStatus = async (req, res, next) => {
 export const chapaWebhook = async (req, res) => {
   try {
     const { trx_ref, ref_id, status } = req.query;
-
     console.log("Chapa Webhook received:", { trx_ref, ref_id, status });
 
     // 1. Verify with Chapa
@@ -261,10 +260,8 @@ export const chapaWebhook = async (req, res) => {
     const orderId = trx_ref.replace("order-", "");
     console.log("Extracted orderId:", orderId);
 
-    // 3. Find order (bypassing Paid filter)
+    // 3. Find order (with bypassPaidFilter)
     const order = await Order.findById(orderId, null, { bypassPaidFilter: true });
-    console.log("Order lookup result:", order?._id);
-
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
@@ -274,9 +271,26 @@ export const chapaWebhook = async (req, res) => {
     order.transaction.refId = ref_id;
     await order.save();
 
-    console.log("Order updated successfully:", order._id);
+    console.log("✅ Order updated successfully:", order._id);
 
-    // 5. Respond OK
+    // 5. Notify restaurant manager if payment succeeded
+    if (status === "success") {
+      const restaurant = await Restaurant.findById(order.restaurantId);
+      if (restaurant?.managerId) {
+        notifyRestaurantManager(restaurant.managerId, {
+          orderId: order._id,
+          totalPrice: order.totalPrice,
+          orderCode: order.orderCode,
+          typeOfOrder: order.typeOfOrder,
+          createdAt: order.createdAt,
+        });
+        console.log(`📢 Notified manager ${restaurant.managerId} about new paid order`);
+      } else {
+        console.log(`⚠️ Restaurant ${order.restaurantId} has no manager assigned`);
+      }
+    }
+
+    // 6. Respond OK
     return res.status(200).json({ message: "Webhook processed successfully" });
   } catch (err) {
     console.error("Webhook error:", err.message);

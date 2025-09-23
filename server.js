@@ -4,6 +4,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import app from './app.js';
+import User from './models/userModel.js';
 
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
@@ -36,100 +37,119 @@ mongoose
 
 const port = process.env.PORT || 3000;
 const httpServer = http.createServer(app);
-const io = new Server(httpServer);
 
-// JWT Validation Middleware
-const authenticateSocket = (socket, next) => {
-  const token = socket.handshake.auth.token;
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CLIENT_URL || '*',
+    methods: ['GET', 'POST'],
+  },
+});
+
+// ================= JWT Validation Middleware =================
+const authenticateSocket = async (socket, next) => {
+  const token = socket.handshake.auth?.token;
   if (!token) {
     return next(new Error('Authentication error: No token provided'));
   }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    socket.user = decoded; // Attach decoded token data to socket
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return next(new Error('Authentication error: User not found'));
+    }
+    
+    socket.user = user; // attach full user object from DB
     next();
   } catch (err) {
-    return next(new Error('Authentication error: Invalid token'));
+    return next(new Error('Authentication error: Invalid or expired token'));
   }
 };
 
-// Delivery Namespace
-export const deliveryNamespace = io.of('/delivery');
-deliveryNamespace.use(authenticateSocket); // Apply JWT middleware
-deliveryNamespace.on('connection', (socket) => {
-  console.log(`A delivery guy connected: ${socket.id}, User: ${socket.user.id}`);
+io.use(authenticateSocket);
 
-  socket.on('joinVehicleRoom', (vehicleType) => {
-    if (!['Car', 'Motor', 'Bicycle'].includes(vehicleType)) {
-      socket.emit('error', 'Invalid vehicle type. Allowed types: Car, Motor, Bicycle');
+// ================= Track Manager Connections =================
+// managerId -> Set of socketIds
+const managerSockets = new Map();
+
+// ================= Handle Connections by Role =================
+io.on('connection', (socket) => {
+  const { _id: userId, role, deliveryMethod } = socket.user;
+
+  console.log(
+    `🔗 User connected: ${socket.id}, Role: ${role}, UserId: ${userId}`
+  );
+
+  // If Delivery_Person -> join deliveryMethod room
+  if (role === 'Delivery_Person') {
+    if (!['Car', 'Motor', 'Bicycle'].includes(deliveryMethod)) {
+      socket.emit(
+        'errorMessage',
+        'Invalid delivery method. Allowed: Car, Motor, Bicycle'
+      );
       return;
     }
-    try {
-      socket.join(vehicleType);
-      console.log(`Socket ${socket.id} joined room: ${vehicleType}`);
-      socket.emit('message', `Welcome! You are in the ${vehicleType} room.`);
-    } catch (err) {
-      socket.emit('error', 'Failed to join room');
-    }
-  });
+    socket.join(deliveryMethod);
+    console.log(`🚚 Delivery person ${userId} joined ${deliveryMethod} group`);
+    socket.emit(
+      'message',
+      `Welcome Delivery_Person! You are in the ${deliveryMethod} group.`
+    );
+  }
 
-  socket.on('sendToVehicleRoom', ({ vehicleType, message }) => {
-    if (!['Car', 'Motor', 'Bicycle'].includes(vehicleType)) {
-      socket.emit('error', 'Invalid vehicle type. Allowed types: Car, Motor, Bicycle');
-      return;
+  // If Manager -> map socket to managerId
+  if (role === 'Manager') {
+    if (!managerSockets.has(userId.toString())) {
+      managerSockets.set(userId.toString(), new Set());
     }
-    try {
-      deliveryNamespace.to(vehicleType).emit('message', message);
-      console.log(`Message sent to ${vehicleType} room: ${message}`);
-    } catch (err) {
-      socket.emit('error', 'Failed to send message');
-    }
-  });
+    managerSockets.get(userId.toString()).add(socket.id);
+    console.log(`🏢 Manager ${userId} mapped to socket ${socket.id}`);
+  }
 
+  // Handle disconnect
   socket.on('disconnect', () => {
-    console.log(`A delivery guy disconnected: ${socket.id}`);
+    console.log(`❌ User disconnected: ${socket.id}`);
+
+    if (role === 'Manager' && managerSockets.has(userId.toString())) {
+      managerSockets.get(userId.toString()).delete(socket.id);
+      if (managerSockets.get(userId.toString()).size === 0) {
+        managerSockets.delete(userId.toString());
+      }
+    }
   });
 });
 
-// Restaurant Namespace
-export const restaurantNamespace = io.of('/restaurant');
-restaurantNamespace.use(authenticateSocket); // Apply JWT middleware
-restaurantNamespace.on('connection', (socket) => {
-  console.log(`A restaurant client connected: ${socket.id}, User: ${socket.user.id}`);
+// ================= Helper: Notify Manager =================
+export const notifyRestaurantManager = (managerId, orderData) => {
+  const sockets = managerSockets.get(managerId.toString());
+  if (sockets && sockets.size > 0) {
+    sockets.forEach((sid) => {
+      io.to(sid).emit('newOrder', orderData);
+    });
+    console.log(`✅ Notified manager ${managerId} on ${sockets.size} device(s)`);
+  } else {
+    console.log(`⚠️ Manager ${managerId} is not connected`);
+  }
+};
 
-  socket.on('joinRestaurantRoom', (restaurantId) => {
-    if (!restaurantId || typeof restaurantId !== 'string') {
-      socket.emit('error', 'Invalid restaurant ID');
-      return;
-    }
-    try {
-      socket.join(restaurantId);
-      console.log(`Socket ${socket.id} joined restaurant room: ${restaurantId}`);
-      socket.emit('message', `Welcome! You are in the restaurant room: ${restaurantId}`);
-    } catch (err) {
-      socket.emit('error', 'Failed to join room');
-    }
-  });
+// ================= Helper: Send to Delivery Group =================
+export const notifyDeliveryGroup = (deliveryMethod, message) => {
+  if (!['Car', 'Motor', 'Bicycle'].includes(deliveryMethod)) {
+    console.log('❌ Invalid delivery method');
+    return;
+  }
+  io.to(deliveryMethod).emit('deliveryMessage', message);
+  console.log(`📢 Sent message to ${deliveryMethod} group: ${message}`);
+};
 
-  socket.on('sendToRestaurantRoom', ({ restaurantId, message }) => {
-    if (!restaurantId || typeof restaurantId !== 'string') {
-      socket.emit('error', 'Invalid restaurant ID');
-      return;
-    }
-    try {
-      restaurantNamespace.to(restaurantId).emit('message', message);
-      console.log(`Message sent to restaurant ${restaurantId} room: ${message}`);
-    } catch (err) {
-      socket.emit('error', 'Failed to send message');
-    }
-  });
+// ================= Helper: Notify Customer =================
+export const notifyCustomer = (customerId, message) => {
+  io.to(`customer:${customerId}`).emit('customerMessage', message);
+  console.log(`📩 Sent message to customer ${customerId}`);
+};
 
-  socket.on('disconnect', () => {
-    console.log(`A restaurant client disconnected: ${socket.id}`);
-  });
-});
-
+// ================= Start Server =================
 httpServer.listen(port, () => {
   console.log(`🚀 App running on port ${port}...`);
 });
