@@ -17,7 +17,7 @@ const transactionSchema = new mongoose.Schema({
 
 // --- Allowed order status transitions ---
 const STATUS_FLOW = {
-  Pending: ["Preparing", "Cancelled"],
+  Pending: ["Preparing", "Cancelled","Cooked"],
   Preparing: ["Cooked", "Cancelled"],
   Cooked: ["Delivering", "Cancelled"],
   Delivering: ["Completed", "Cancelled"],

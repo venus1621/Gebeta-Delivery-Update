@@ -160,13 +160,12 @@ export const placeOrder = async (req, res, next) => {
 
 export const updateOrderStatus = async (req, res, next) => {
   try {
-    // Validate input
     const { orderId, status } = req.body;
     if (!orderId || !status) {
-      return res.status(400).json({ error: { message: 'orderId and status are required.' } });
+      return res.status(400).json({ error: { message: "orderId and status are required." } });
     }
 
-    // Use findOneAndUpdate to respect schema validation
+    // Find & update order with schema validation
     const order = await Order.findOneAndUpdate(
       { _id: orderId },
       { $set: { orderStatus: status } },
@@ -174,12 +173,12 @@ export const updateOrderStatus = async (req, res, next) => {
     );
 
     if (!order) {
-      return res.status(404).json({ error: { message: 'Order not found.' } });
+      return res.status(404).json({ error: { message: "Order not found." } });
     }
 
-    // Handle delivery notification for "Cooked" status
-    if (status === 'Cooked' && order.typeOfOrder === 'Delivery') {
-      const restaurant = await Restaurant.findById(order.restaurant_id);
+    // 🔑 Handle Cooked → notify drivers
+    if (status === "Cooked" && order.typeOfOrder === "Delivery") {
+      const restaurant = await Restaurant.findById(order.restaurantId);
       if (!restaurant) {
         console.warn(`Restaurant not found for order ${order._id}, skipping delivery notification.`);
       } else {
@@ -187,54 +186,62 @@ export const updateOrderStatus = async (req, res, next) => {
           lat: restaurant.location.coordinates[1],
           lng: restaurant.location.coordinates[0],
         };
-        const deliveryLocation = order.location;
+        const deliveryLocation = order.destinationLocation;
 
-        // Calculate grand total including foodTotal
         const grandTotal =
           parseFloat(order.foodTotal.toString()) +
           parseFloat(order.deliveryFee.toString()) +
-          parseFloat(order.tip?.toString() || '0');
+          parseFloat(order.tip?.toString() || "0");
 
         const io = getIO();
         if (!io) {
-          console.warn('Socket.IO not initialized, skipping delivery notification.');
+          console.warn("Socket.IO not initialized, skipping delivery notification.");
         } else {
-          io.to('deliveries').emit('order:cooked', {
+          // ✅ Use the model’s deliveryVehicle for group targeting
+          const deliveryGroup = order.deliveryVehicle; // "Car", "Motor", "Bicycle"
+
+          io.to(`deliveries:${deliveryGroup}`).emit("order:cooked", {
             orderId: order._id,
-            order_code: order.order_code, // Fixed: Use order_code
+            orderCode: order.orderCode,
             restaurantLocation,
-            restaurant_name: restaurant.name,
+            restaurantName: restaurant.name,
             deliveryLocation,
             deliveryFee: parseFloat(order.deliveryFee.toString()),
-            tip: parseFloat(order.tip?.toString() || '0'),
+            tip: parseFloat(order.tip?.toString() || "0"),
             grandTotal: grandTotal.toFixed(2),
             createdAt: order.createdAt,
           });
 
-          // Broadcast available orders count
+          // ✅ Count only orders of same vehicle type
           try {
             const availableCount = await Order.countDocuments({
-              orderStatus: 'Cooked',
-              typeOfOrder: 'Delivery',
+              orderStatus: "Cooked",
+              typeOfOrder: "Delivery",
+              deliveryVehicle: deliveryGroup,
               deliveryId: { $exists: false },
             });
-            io.to('deliveries').emit('available-orders-count', { count: availableCount });
+
+            io.to(`deliveries:${deliveryGroup}`).emit("available-orders-count", {
+              count: availableCount,
+            });
           } catch (countError) {
-            console.warn('Failed to broadcast available orders count:', countError);
+            console.warn("Failed to broadcast available orders count:", countError);
           }
 
-          console.log(`✅ Broadcasted cooked order notification for order ${order._id}`);
+          console.log(
+            `✅ Broadcasted cooked order ${order._id} to delivery group "${deliveryGroup}"`
+          );
         }
       }
     }
 
     res.status(200).json({
-      status: 'success',
+      status: "success",
       message: `Order status updated to ${status}.`,
       data: { order },
     });
   } catch (error) {
-    console.error('Error updating order status:', error.message);
+    console.error("Error updating order status:", error.message);
     next(error);
   }
 };
