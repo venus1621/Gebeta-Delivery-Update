@@ -2,6 +2,7 @@ import express from 'express';
 import {
   signup,
   login,
+  getMe,
   sendOTP,
   verifyOTP,
   verifySignupOTP,
@@ -44,6 +45,7 @@ router.post('/signup', signup);
 // Login with phone & password
 router.post('/login', login);
 
+router.post('/getMe', protect, getMe);
 // Send OTP (generic use)
 router.post('/sendOTP', sendOTP);
 
@@ -77,11 +79,6 @@ router.patch('/updateMyPassword', updatePassword);
 // Update current user's profile info
 router.patch('/updateMe', upload.single('profilePicture'), updateMe);
 
-// Allow delivery users to set delivery method
-router.patch('/me/delivery-method', (req, res, next) => {
-  req.body = { deliveryMethod: req.body.deliveryMethod };
-  next();
-}, updateMe);
 
 // Soft delete current user's account
 router.delete('/deleteMe', deleteMe);
