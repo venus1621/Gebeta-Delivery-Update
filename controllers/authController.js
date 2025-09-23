@@ -5,6 +5,7 @@ import twilio from 'twilio';
 import User from '../models/userModel.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
+import Restaurant from '../models/restaurantModel.js';
 
 // 📞 Normalize Ethiopian phone number
 export const normalizePhone = (phone) => {
@@ -213,13 +214,24 @@ export const login = catchAsync(async (req, res, next) => {
 });
 
 
-export const getMe =catchAsync(async (req, res, next) => {
-  const user = await User.findById(req.user.id);
-  if (!user) return next(new AppError('User not found', 404));
+export const getMe = catchAsync(async (req, res, next) => {
+  const user = await User.findById(req.user.id).select("-password"); // never expose password
+  if (!user) return next(new AppError("User not found", 404));
+
+  let restaurant = null;
+
+  if (user.role === "Manager") {
+    restaurant = await Restaurant.findOne({ managerId: user._id });
+  }
 
   res.status(200).json({
-    status: 'success',
-    data: { user },
+    status: "success",
+    data: {
+      user,
+      restaurant: restaurant
+        ? { id: restaurant._id, name: restaurant.name } // return only what you need
+        : null,
+    },
   });
 });
 // 🛡️ 6. Protect Route Middleware
