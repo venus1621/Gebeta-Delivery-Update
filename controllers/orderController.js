@@ -662,47 +662,37 @@ export const getCookedOrders = async (req, res, next) => {
 // Get all available cooked orders (without delivery assignment) for delivery app
 export const getAvailableCookedOrders = async (req, res, next) => {
   try {
-    const availableOrders = await Order.find({ 
-      orderStatus: 'Cooked', 
-      typeOfOrder: 'Delivery',
-      deliveryId: { $exists: false } // No delivery person assigned yet
+    const availableOrders = await Order.find({
+      orderStatus: "Cooked",
+      typeOfOrder: "Delivery",
+      deliveryId: { $exists: false }, // No delivery assigned yet
     })
-      .populate('userId', 'firstName lastName phone')
-      .populate('restaurant_id', 'name location')
-      .populate('orderItems.foodId', 'foodName price')
-      .sort({ createdAt: 1 }); // Oldest first (FIFO)
+      .populate("restaurantId", "name")
+      .sort({ createdAt: 1 }); // FIFO (oldest first)
 
-    const formattedOrders = availableOrders.map(order => ({
+    const formattedOrders = availableOrders.map((order) => ({
       orderId: order._id,
-      order_id: order.order_id,
-      restaurantLocation: {
-        lat: order.restaurant_id?.location?.coordinates?.[1] || 0,
-        lng: order.restaurant_id?.location?.coordinates?.[0] || 0,
-      },
-      deliveryLocation: order.location,
-      deliveryFee: order.deliveryFee,
-      tip: order.tip,
-      grandTotal: order.totalPrice,
+      orderCode: order.orderCode,
+      restaurantName: order.restaurantId?.name || "",
+      restaurantLocation: order.restaurantLocation || null,
+      deliveryLocation: order.destinationLocation || null,
+      deliveryFee: parseFloat(order.deliveryFee?.toString() || "0"),
+      tip: parseFloat(order.tip?.toString() || "0"),
+      grandTotal: parseFloat(order.totalPrice?.toString() || "0"),
       createdAt: order.createdAt,
-      customer: {
-        name: `${order.userId?.firstName || ''} ${order.userId?.lastName || ''}`.trim(),
-        phone: order.userId?.phone,
-      },
-      items: order.orderItems.map(item => ({
-        foodName: item.foodId?.foodName,
-        price: item.foodId?.price,
-        quantity: item.quantity,
-      })),
     }));
 
     res.status(200).json({
-      status: 'success',
+      status: "success",
       results: formattedOrders.length,
-      data: formattedOrders
+      data: formattedOrders,
     });
   } catch (error) {
-    console.error('Error fetching available cooked orders:', error.message);
-    res.status(500).json({ message: 'Server error retrieving available cooked orders' });
+    console.error("Error fetching available cooked orders:", error.message);
+    res.status(500).json({
+      status: "error",
+      message: "Server error retrieving available cooked orders",
+    });
   }
 };
 
