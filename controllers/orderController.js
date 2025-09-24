@@ -199,7 +199,7 @@ export const updateOrderStatus = async (req, res, next) => {
         } else {
           // ✅ Use the model’s deliveryVehicle for group targeting
           const deliveryGroup = order.deliveryVehicle; // "Car", "Motor", "Bicycle"
-
+          console.log(`Broadcasting cooked order ${order._id} to delivery group "${deliveryGroup}"`);
           io.to(`deliveries:${deliveryGroup}`).emit("order:cooked", {
             orderId: order._id,
             orderCode: order.orderCode,
