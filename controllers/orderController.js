@@ -48,7 +48,7 @@ const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
     amount: amount.toString(),
     currency,
     first_name: user.firstName,
-    mobile: user.phone || "N/A",
+    phone_number: user.phone || "N/A",
     tx_ref: txRef,
     
     callback_url: "https://gebeta-delivery1.onrender.com/api/v1/orders/chapa-webhook",
@@ -67,7 +67,6 @@ const initializeChapaPayment = async ({ amount, currency, orderId, user }) => {
     },
     timeout: 35000,
   });
-
   // Check success
   if (!response?.data || response.data.status !== "success") {
     throw new Error(`Chapa payment initialization failed: ${response?.data?.message || "Unknown error"}`);
@@ -137,7 +136,7 @@ export const placeOrder = async (req, res, next) => {
       return res.status(400).json({
         error: { message: 'User first name, last name, and email are required for payment processing.' },
       });
-    }
+    }   
     // --- Initialize Chapa payment ---
     const paymentInit = await initializeChapaPayment({
       amount: totalPrice,
@@ -145,7 +144,7 @@ export const placeOrder = async (req, res, next) => {
       orderId: order._id,
       user,
     });
-
+    
     res.status(201).json({
       status: 'success',
       data: {
