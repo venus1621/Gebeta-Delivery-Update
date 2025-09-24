@@ -188,10 +188,9 @@ export const updateOrderStatus = async (req, res, next) => {
             orderCode: order.orderCode,
             restaurantLocation:order.restaurantLocation,
             restaurantName: restaurant.name,
-            deliveryLocation,
+            deliveryLocation:order.destinationLocation,
             deliveryFee: parseFloat(order.deliveryFee.toString()),
             tip: parseFloat(order.tip?.toString() || "0"),
-            grandTotal: grandTotal.toFixed(2),
             createdAt: order.createdAt,
       })
       }
