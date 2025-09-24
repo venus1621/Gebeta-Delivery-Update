@@ -6,7 +6,7 @@ import User from '../models/userModel.js';
 import axios from 'axios';
 import { getIO } from '../utils/socket.js';
 import { computeDeliveryFee } from '../utils/computeDeliveryFee.js';
-import {notifyRestaurantManager} from '../server.js';
+import {notifyRestaurantManager,notifyDeliveryGroup} from '../server.js';
 
 // Generate a unique order_id (e.g., ORD-XXXXXX)
 const generateOrderId = async () => {
@@ -200,7 +200,8 @@ export const updateOrderStatus = async (req, res, next) => {
           // ✅ Use the model’s deliveryVehicle for group targeting
           const deliveryGroup = order.deliveryVehicle; // "Car", "Motor", "Bicycle"
           console.log(`Broadcasting cooked order ${order._id} to delivery group "${deliveryGroup}"`);
-          io.to(`deliveries:${deliveryGroup}`).emit("order:cooked", {
+
+          notifyDeliveryGroup(deliveryGroup,{
             orderId: order._id,
             orderCode: order.orderCode,
             restaurantLocation,
@@ -210,7 +211,7 @@ export const updateOrderStatus = async (req, res, next) => {
             tip: parseFloat(order.tip?.toString() || "0"),
             grandTotal: grandTotal.toFixed(2),
             createdAt: order.createdAt,
-          });
+          })
 
           // ✅ Count only orders of same vehicle type
           try {
