@@ -479,8 +479,6 @@ export const getOrdersByRestaurantId = async (req, res, next) => {
       });
     }
 
-    console.log(orders);
-    // 🔹 Format response
     const formattedOrders = orders.map(order => {
 
 
