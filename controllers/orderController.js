@@ -174,67 +174,27 @@ export const updateOrderStatus = async (req, res, next) => {
     if (!order) {
       return res.status(404).json({ error: { message: "Order not found." } });
     }
-
     // 🔑 Handle Cooked → notify drivers
-    if (status === "Cooked" && order.typeOfOrder === "Delivery") {
+    if (order.orderStatus === "Cooked" && order.typeOfOrder === "Delivery") {
       const restaurant = await Restaurant.findById(order.restaurantId);
       if (!restaurant) {
-        console.warn(`Restaurant not found for order ${order._id}, skipping delivery notification.`);
-      } else {
-        const restaurantLocation = {
-          lat: restaurant.location.coordinates[1],
-          lng: restaurant.location.coordinates[0],
-        };
-        const deliveryLocation = order.destinationLocation;
-
-        const grandTotal =
-          parseFloat(order.foodTotal.toString()) +
-          parseFloat(order.deliveryFee.toString()) +
-          parseFloat(order.tip?.toString() || "0");
-
-        const io = getIO();
-        if (!io) {
-          console.warn("Socket.IO not initialized, skipping delivery notification.");
-        } else {
-          // ✅ Use the model’s deliveryVehicle for group targeting
-          const deliveryGroup = order.deliveryVehicle; // "Car", "Motor", "Bicycle"
-          console.log(`Broadcasting cooked order ${order._id} to delivery group "${deliveryGroup}"`);
+        console.error(`Restaurant ${order.restaurantId} not found for order ${order._id}`);
+      }
+        const deliveryGroup = order.deliveryVehicle; // "Car", "Motor", "Bicycle"
+        console.log(`Broadcasting cooked order ${order._id} to delivery group "${deliveryGroup}"`);
 
           notifyDeliveryGroup(deliveryGroup,{
             orderId: order._id,
             orderCode: order.orderCode,
-            restaurantLocation,
+            restaurantLocation:order.restaurantLocation,
             restaurantName: restaurant.name,
             deliveryLocation,
             deliveryFee: parseFloat(order.deliveryFee.toString()),
             tip: parseFloat(order.tip?.toString() || "0"),
             grandTotal: grandTotal.toFixed(2),
             createdAt: order.createdAt,
-          })
-
-          // ✅ Count only orders of same vehicle type
-          try {
-            const availableCount = await Order.countDocuments({
-              orderStatus: "Cooked",
-              typeOfOrder: "Delivery",
-              deliveryVehicle: deliveryGroup,
-              deliveryId: { $exists: false },
-            });
-
-            io.to(`deliveries:${deliveryGroup}`).emit("available-orders-count", {
-              count: availableCount,
-            });
-          } catch (countError) {
-            console.warn("Failed to broadcast available orders count:", countError);
-          }
-
-          console.log(
-            `✅ Broadcasted cooked order ${order._id} to delivery group "${deliveryGroup}"`
-          );
-        }
+      })
       }
-    }
-
     res.status(200).json({
       status: "success",
       message: `Order status updated to ${status}.`,
