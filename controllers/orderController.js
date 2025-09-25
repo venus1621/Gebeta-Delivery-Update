@@ -778,7 +778,7 @@ export const getDeliveryOrderHistory = async (req, res, next) => {
 
     // Map orders to extract relevant data for history
     const orderHistory = orders.map(order => ({
-
+      orderId: order._id,
       restaurantName: order.restaurantId?.name || 'Unknown',
       deliveryFee: parseFloat(order.deliveryFee?.toString() || '0'),
       tip: parseFloat(order.tip?.toString() || '0'),
