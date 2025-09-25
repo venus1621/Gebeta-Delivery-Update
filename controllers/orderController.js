@@ -771,7 +771,8 @@ export const getDeliveryOrderHistory = async (req, res, next) => {
     res.status(200).json({
       status: 'success',
       results: orders.length,
-      data: { restaurnatname:orders.restaurantId?.name,orders,
+      data: { 
+        restaurnatname:orders.restaurantId?.name,orders,
         deliveryFee: parseFloat(orders.deliveryFee?.toString() || "0"),
         tip: parseFloat(orders.tip?.toString() || "0"),       },
     });
