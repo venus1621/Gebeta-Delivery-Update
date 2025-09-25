@@ -117,8 +117,7 @@ io.on('connection', (socket) => {
       `Welcome Delivery_Person! You are in the ${deliveryMethod} group.`
     );
 
-    socke
-    t.on('acceptOrder', async ({ orderId }, callback) => {
+  socket.on('acceptOrder', async ({ orderId }, callback) => {
       const session = await mongoose.startSession();
       session.startTransaction();
       try {
