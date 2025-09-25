@@ -736,35 +736,35 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
     const deliveryPersonId = req.user._id; // from auth middleware 
     console.log('Fetching orders for delivery person:', deliveryPersonId);
     // Find all orders assigned to this delivery person
-    const orders = await Order.findOne({
-      
-deliveryId: deliveryPersonId,
-    })
-      .populate('userId', 'phone') // only phone
-      .populate('restaurant_id', 'name location') // only name and location
+    const orders = await Order.findOne({deliveryId: deliveryPersonId,})
+      .populate('userId', 'firstName phone') // only phone
+      .populate('restaurantId', 'name') // only name and location
       .sort({ updatedAt: -1 });
-    console.log(orders);
-    // // Format to match cookedOrders style
-    // const formattedOrders = orders.map(order => ({
-    //   userPhone: order.userId?.phone,
-    //   orderId: order._id,
-    //   restaurant: {
-    //     name: order.restaurant_id?.name,
-    //     location: order.restaurant_id?.location,
-    //   },
-    //   orderLocation: order.location,
-    //   deliveryFee: order.deliveryFee,
-    //   tip: order.tip,
-    //   totalPrice: order.totalPrice,
-    //   orderStatus: order.orderStatus,
-    //   verificationCode: order.deliveryVerificationCode,
-    //   orderCode: order.orderCode,
-    // }));
+     if (!orders) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No orders found for this delivery person',
+      });
+     }  
 
     res.status(200).json({
       status: 'success',
       
-      data: orders,
+      data: {
+        restaurnatLocation:orders.restaurantLocation,
+        destinationLocation:orders.destinationLocation,
+        userName: orders.userId?.firstName,
+        phone: orders.userId?.phone,
+        restaurantName: orders.restaurantId?.name,
+        deliveryFee: parseFloat(orders.deliveryFee?.toString() || "0"),
+        tip: parseFloat(orders.tip?.toString() || "0"),
+        description:orders.description,
+        orderStatus: orders.orderStatus,
+        orderCode:orders.orderCode,
+        pickUpVerificationCode:orders.deliveryVerificationCode,
+
+
+      },
     });
   } catch (error) {
     console.error('Error fetching delivery man orders:', error.message);
