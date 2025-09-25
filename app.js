@@ -54,5 +54,5 @@ app.get('/', (req, res) => {
 });
 console.log('Verify SID:', process.env.TWILIO_VERIFY_SERVICE_ID);
 
-// app.use(globalErrorHandler);
+app.use(globalErrorHandler);
 export default app;

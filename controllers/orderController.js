@@ -277,64 +277,35 @@ export const verifyOrderDelivery = async (req, res, next) => {
         error: { message: 'Order ID and verification code are required.' },
       });
     }
-    if (typeof order_id !== 'string' || typeof verification_code !== 'string') {
-      return res.status(400).json({
-        error: { message: 'Order ID and verification code must be strings.' },
-      });
-    }
+    
     if (!deliveryPersonId) {
       return res.status(401).json({
         error: { message: 'Unauthorized: Delivery person ID required.' },
       });
     }
 
-    // Find and update order atomically
-    const updatedOrder = await Order.findOneAndUpdate(
-      {
-        order_code: order_id,
-        orderStatus: 'Delivering', // Ensure correct status
-        deliveryId: deliveryPersonId, // Enforce delivery person match
-        user_verification_code: verification_code, // Verify code
-      },
-      {
-        $set: {
-          orderStatus: 'Completed',
-        },
-      },
-      { new: true, runValidators: true }
-    );
+    console.log(order_id,verification_code,deliveryPersonId)
 
-    if (!updatedOrder) {
-      // Determine specific error
-      const order = await Order.findOne({ order_code: order_id });
-      if (!order) {
-        return res.status(404).json({ error: { message: 'Order not found.' } });
-      }
-      if (order.orderStatus !== 'Delivering') {
-        return res.status(400).json({
-          error: { message: 'Order must be in Delivering status to verify delivery.' },
-        });
-      }
-      if (order.deliveryId.toString() !== deliveryPersonId.toString()) {
-        return res.status(403).json({
-          error: { message: 'Only the assigned delivery person can verify this order.' },
-        });
-      }
-      if (order.user_verification_code !== verification_code) {
-        return res.status(400).json({ error: { message: 'Invalid verification code.' } });
-      }
-      return res.status(500).json({ error: { message: 'Failed to update order.' } });
+
+   const order= await Order.findOne({orderCode:order_id,deliveryId:deliveryPersonId,orderStatus:"Delivering"});
+
+    if (!order) {
+      return res.status(404).json({ error: { message: 'Order not found.' } });
     }
+    if (order.deliveryVerificationCode !== verification_code) {
+      return res.status(400).json({ error: { message: 'Invalid verification code.' } });
+    }
+    order.orderStatus="Completed";
 
-    
+   
 
     return res.status(200).json({
       status: 'success',
       message: 'Order delivery verified successfully.',
-      data: { order: updatedOrder },
+      data: { order },
     });
   } catch (error) {
-    console.error(`Error verifying order delivery for order_code ${order_id}:`, error.message);
+    console.error(`Error verifying order delivery for order_code ${order_id}:`, error);
     next(error);
   }
 }
@@ -762,8 +733,6 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
         orderStatus: orders.orderStatus,
         orderCode:orders.orderCode,
         pickUpVerificationCode:orders.deliveryVerificationCode,
-
-
       },
     });
   } catch (error) {
