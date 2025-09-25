@@ -292,7 +292,7 @@ export const verifyOrderDelivery = async (req, res, next) => {
     if (!order) {
       return res.status(404).json({ error: { message: 'Order not found.' } });
     }
-    if (order.deliveryVerificationCode !== verification_code) {
+    if (order.userVerificationCode !== verification_code) {
       return res.status(400).json({ error: { message: 'Invalid verification code.' } });
     }
     order.orderStatus="Completed";
