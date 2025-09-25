@@ -518,21 +518,29 @@ export const acceptOrder = async (req, res, next) => {
         },
       });
     }
+    const pickUpcode= generateVerificationCode()
+    const order = await Order.findById(orderId);
+    order.orderStatus="Delivering";
+    order.deliveryVerificationCode=pickUpcode;
+    order.deliveryId=deliveryPersonId;
+    order.save();
+    console.log(order);   
 
-    // Find and update the new order atomically
-    const order = await Order.findOneAndUpdate(
-      {
-        _id: orderId,
-        orderStatus: 'Cooked',
-        typeOfOrder: 'Delivery',
-        deliveryId: { $exists: false },
-      },
-      {
-        deliveryId: deliveryPersonId,
-        deliveryVerificationCode: generateVerificationCode(),
-      },
-      { new: true }
-    );
+    // // Find and update the new order atomically
+    // const order = await Order.findOneAndUpdate(
+    //   {
+    //     _id: orderId,
+    //     orderStatus: 'Cooked',
+    //     typeOfOrder: 'Delivery',
+    //     deliveryId: { $exists: false },
+    //   },
+    //   {
+    //     deliveryId: deliveryPersonId,
+    //     deliveryVerificationCode: generateVerificationCode(),
+    //   },
+    //   { new: true }
+    // );
+    console.log(order)
 
     if (!order) {
       return res
@@ -542,11 +550,19 @@ export const acceptOrder = async (req, res, next) => {
 
     res.status(200).json({
       status: 'success',
-      message: `Order ${order.order_id} accepted.`,
+      message: `Order ${order._id} accepted.`,
       data: {
-        orderCode: order.order_id,
+        restaurantLocation:order.restaurantLocation,
+        deliverLocation:order.destinationLocation,
+        deliveryFee:parseFloat( order.deliveryFee?.toString() || "0"),
+        tip:parseFloat( order.tip?.toString() || "0"),
+        distanceKm:order.distanceKm,
+        description:order.description,
+        status:order.orderStatus,
+        orderCode:order.orderCode,
         pickUpVerification: order.deliveryVerificationCode,
-      },
+  
+            },
     });
   } catch (error) {
     console.error('Error accepting order:', error.message);

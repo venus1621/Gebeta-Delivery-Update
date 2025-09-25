@@ -117,7 +117,8 @@ io.on('connection', (socket) => {
       `Welcome Delivery_Person! You are in the ${deliveryMethod} group.`
     );
 
-    socket.on('acceptOrder', async ({ orderId }, callback) => {
+    socke
+    t.on('acceptOrder', async ({ orderId }, callback) => {
       const session = await mongoose.startSession();
       session.startTransaction();
       try {
@@ -139,25 +140,17 @@ io.on('connection', (socket) => {
           );
         }
 
-        // Atomically find & update the order
-        const order = await Order.findOneAndUpdate(
-          {
-            _id: orderId,
-            orderStatus: 'Cooked',
-            typeOfOrder: 'Delivery',
-            deliveryId: { $exists: false },
-          },
-          {
-            deliveryId: deliveryPersonId,
-            deliveryVerificationCode: generateVerificationCode(),
-            orderStatus: 'Accepted',
-          },
-          { new: true, session }
-        );
+        const pickUpcode= generateVerificationCode()
+            const order = await Order.findById(orderId);
+            order.orderStatus="Delivering";
+            order.deliveryVerificationCode=pickUpcode;
+            order.deliveryId=deliveryPersonId;
+            order.save();
 
         if (!order) {
           throw new Error('Order is not available for acceptance.');
         }
+
 
         await session.commitTransaction();
 
@@ -166,16 +159,19 @@ io.on('connection', (socket) => {
           status: 'success',
           message: `Order ${order.order_id} accepted.`,
           data: {
-            orderCode: order.order_id,
-            pickUpVerification: order.deliveryVerificationCode,
-          },
+        restaurantLocation:order.restaurantLocation,
+        deliverLocation:order.destinationLocation,
+        deliveryFee:parseFloat( order.deliveryFee?.toString() || "0"),
+        tip:parseFloat( order.tip?.toString() || "0"),
+        distanceKm:order.distanceKm,
+        description:order.description,
+        status:order.orderStatus,
+        orderCode:order.orderCode,
+        pickUpVerification: order.deliveryVerificationCode,
+  
+            },
         });
 
-        // Notify the delivery group that the order is taken
-        notifyDeliveryGroup(deliveryMethod, {
-          type: 'orderTaken',
-          orderId: order._id,
-        });
 
       } catch (error) {
         await session.abortTransaction();
