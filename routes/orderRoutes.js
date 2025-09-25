@@ -13,7 +13,8 @@ import {
   verifyOrderDelivery,
   acceptOrder,
   pickUpOrder,
-  getOrdersByDeliveryMan
+  getOrdersByDeliveryMan,
+  getDeliveryOrderHistory
 } from '../controllers/orderController.js';
 import { protect } from '../controllers/authController.js'; // Auth middleware (JWT)
 
@@ -44,5 +45,6 @@ router.get('/available-cooked', protect, getAvailableCookedOrders); // For deliv
 router.get('/available-cooked/count', protect, getAvailableCookedOrdersCount); // Count for delivery apps
 
 router.get("/get-orders-by-DeliveryMan", protect, getOrdersByDeliveryMan);
+router.get("/orderHistory", protect, getDeliveryOrderHistory);
 
 export default router;

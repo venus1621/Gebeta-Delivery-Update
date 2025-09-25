@@ -268,36 +268,49 @@ export const chapaWebhook = async (req, res) => {
 
 export const verifyOrderDelivery = async (req, res, next) => {
   try {
-    // Validate input
     const { order_id, verification_code } = req.body;
     const deliveryPersonId = req.user?._id;
 
+    // Validate input
     if (!order_id || !verification_code) {
       return res.status(400).json({
-        error: { message: 'Order ID and verification code are required.' },
+        status: 'fail',
+        message: 'Order ID and verification code are required.',
       });
     }
-    
+
     if (!deliveryPersonId) {
       return res.status(401).json({
-        error: { message: 'Unauthorized: Delivery person ID required.' },
+        status: 'fail',
+        message: 'Unauthorized: Delivery person ID required.',
       });
     }
 
-    console.log(order_id,verification_code,deliveryPersonId)
-
-
-   const order= await Order.findOne({orderCode:order_id,deliveryId:deliveryPersonId,orderStatus:"Delivering"});
+    // Find the order assigned to this delivery person that is still delivering
+    const order = await Order.findOne({
+      orderCode: order_id,
+      deliveryId: deliveryPersonId,
+      orderStatus: 'Delivering',
+    });
 
     if (!order) {
-      return res.status(404).json({ error: { message: 'Order not found.' } });
+      return res.status(404).json({
+        status: 'fail',
+        message: 'Order not found or not assigned to you.',
+      });
     }
-    if (order.userVerificationCode !== verification_code) {
-      return res.status(400).json({ error: { message: 'Invalid verification code.' } });
-    }
-    order.orderStatus="Completed";
 
-   
+    // Verify code
+    if (String(order.userVerificationCode) !== String(verification_code)) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Invalid verification code.',
+      });
+    }
+
+    // Update order
+    order.orderStatus = 'Completed';
+    await order.save();
 
     return res.status(200).json({
       status: 'success',
@@ -305,10 +318,14 @@ export const verifyOrderDelivery = async (req, res, next) => {
       data: { order },
     });
   } catch (error) {
-    console.error(`Error verifying order delivery for order_code ${order_id}:`, error);
+    console.error(
+      `Error verifying order delivery:`,
+      error.message || error
+    );
     next(error);
   }
-}
+};
+
 export const pickUpOrder = async (req, res, next) => {
   try {
     // Validate input
@@ -707,7 +724,7 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
     const deliveryPersonId = req.user._id; // from auth middleware 
     console.log('Fetching orders for delivery person:', deliveryPersonId);
     // Find all orders assigned to this delivery person
-    const orders = await Order.findOne({deliveryId: deliveryPersonId,})
+    const orders = await Order.findOne({deliveryId: deliveryPersonId,orderStatus:'Delivering'})
       .populate('userId', 'firstName phone') // only phone
       .populate('restaurantId', 'name') // only name and location
       .sort({ updatedAt: -1 });
@@ -739,6 +756,30 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
     console.error('Error fetching delivery man orders:', error.message);
     res.status(500).json({ message: 'Server error retrieving delivery orders' });
   }
-};
+}
+
+export const getDeliveryOrderHistory = async (req, res, next) => {
+  try {
+    const deliveryman  = req.user._id;
+    const orders= await Order.find({deliveryId:deliveryman,orderStatus:'Completed'}).populate('restaurantId','name').sort({updatedAt:-1});
+    if(!orders || orders.length===0){
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No completed orders found for this delivery person',
+      });
+    }
+    res.status(200).json({
+      status: 'success',
+      results: orders.length,
+      data: { restaurnatname:orders.restaurantId?.name,orders,
+        deliveryFee: parseFloat(orders.deliveryFee?.toString() || "0"),
+        tip: parseFloat(orders.tip?.toString() || "0"),       },
+    });
+  }catch{
+
+  }
+}
+
+
 
 
