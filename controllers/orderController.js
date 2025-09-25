@@ -760,26 +760,43 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
 
 export const getDeliveryOrderHistory = async (req, res, next) => {
   try {
-    const deliveryman  = req.user._id;
-    const orders= await Order.find({deliveryId:deliveryman,orderStatus:'Completed'}).populate('restaurantId','name').sort({updatedAt:-1});
-    if(!orders || orders.length===0){
+    const deliveryPersonId = req.user._id;
+
+    const orders = await Order.find({
+      deliveryId: deliveryPersonId,
+      orderStatus: 'Completed'
+    })
+    .populate('restaurantId', 'name')
+    .sort({ updatedAt: -1 });
+
+    if (orders.length === 0) {
       return res.status(404).json({
         status: 'fail',
         message: 'No completed orders found for this delivery person',
       });
     }
+
+    // Map orders to extract relevant data for history
+    const orderHistory = orders.map(order => ({
+
+      restaurantName: order.restaurantId?.name || 'Unknown',
+      deliveryFee: parseFloat(order.deliveryFee?.toString() || '0'),
+      tip: parseFloat(order.tip?.toString() || '0'),
+      completedAt: order.updatedAt
+    }));
+
     res.status(200).json({
       status: 'success',
       results: orders.length,
-      data: { 
-        restaurnatname:orders.restaurantId?.name,orders,
-        deliveryFee: parseFloat(orders.deliveryFee?.toString() || "0"),
-        tip: parseFloat(orders.tip?.toString() || "0"),       },
+      data: {
+        orders: orderHistory
+      },
     });
-  }catch{
-
+  } catch (error) {
+    console.error(`Error fetching delivery order history for delivery person ${req.user._id}:`, error.message);
+    next(error);
   }
-}
+};
 
 
 
