@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import app from './app.js';
 import User from './models/userModel.js';
+import Order from './models/Order.js';
 
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
@@ -12,10 +13,15 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
+const generateVerificationCode = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
+
 dotenv.config({ path: './config.env' });
 
 const DB = process.env.DATABASE;
 const JWT_SECRET = process.env.JWT_SECRET;
+const CLIENT_URL = process.env.CLIENT_URL || '*';
+const PORT = process.env.PORT || 3000;
 
 if (!DB) {
   console.error('DATABASE environment variable is not defined!');
@@ -35,12 +41,11 @@ mongoose
     process.exit(1);
   });
 
-const port = process.env.PORT || 3000;
 const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || '*',
+    origin: CLIENT_URL,
     methods: ['GET', 'POST'],
   },
 });
@@ -53,14 +58,14 @@ const authenticateSocket = async (socket, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    const user = await User.findById(decoded.id).select('-password -__v');
 
     if (!user) {
       return next(new Error('Authentication error: User not found'));
     }
     
-    socket.user = user; // attach full user object from DB
+    socket.user = user; // attach user object without sensitive fields
     next();
   } catch (err) {
     return next(new Error('Authentication error: Invalid or expired token'));
@@ -81,13 +86,28 @@ io.on('connection', (socket) => {
     `🔗 User connected: ${socket.id}, Role: ${role}, UserId: ${userId}`
   );
 
-  // If Delivery_Person -> join deliveryMethod room
+  // Validate role
+  if (!['Customer', 'Delivery_Person', 'Manager'].includes(role)) {
+    socket.emit('errorMessage', 'Invalid user role.');
+    socket.disconnect(true);
+    return;
+  }
+
+  // Role-specific logic
+  if (role === 'Customer') {
+    const room = `customer:${userId.toString()}`;
+    socket.join(room);
+    console.log(`🧑 Customer ${userId} joined room ${room}`);
+    socket.emit('message', 'Welcome Customer! You are connected.');
+  }
+
   if (role === 'Delivery_Person') {
     if (!['Car', 'Motor', 'Bicycle'].includes(deliveryMethod)) {
       socket.emit(
         'errorMessage',
         'Invalid delivery method. Allowed: Car, Motor, Bicycle'
       );
+      socket.disconnect(true);
       return;
     }
     socket.join(deliveryMethod);
@@ -96,15 +116,90 @@ io.on('connection', (socket) => {
       'message',
       `Welcome Delivery_Person! You are in the ${deliveryMethod} group.`
     );
+
+    socket.on('acceptOrder', async ({ orderId }, callback) => {
+      const session = await mongoose.startSession();
+      session.startTransaction();
+      try {
+        const deliveryPersonId = socket.user._id;
+
+        if (!orderId) {
+          throw new Error('Order ID is required.');
+        }
+
+        // Check if delivery person already has an active order
+        const existingOrder = await Order.findOne({
+          deliveryId: deliveryPersonId,
+          orderStatus: { $nin: ['Completed', 'Cancelled'] },
+        }).session(session);
+
+        if (existingOrder) {
+          throw new Error(
+            'You already have an active order. Complete or cancel it before accepting a new one.'
+          );
+        }
+
+        // Atomically find & update the order
+        const order = await Order.findOneAndUpdate(
+          {
+            _id: orderId,
+            orderStatus: 'Cooked',
+            typeOfOrder: 'Delivery',
+            deliveryId: { $exists: false },
+          },
+          {
+            deliveryId: deliveryPersonId,
+            deliveryVerificationCode: generateVerificationCode(),
+            orderStatus: 'Accepted',
+          },
+          { new: true, session }
+        );
+
+        if (!order) {
+          throw new Error('Order is not available for acceptance.');
+        }
+
+        await session.commitTransaction();
+
+        // Success response back to this delivery person
+        callback({
+          status: 'success',
+          message: `Order ${order.order_id} accepted.`,
+          data: {
+            orderCode: order.order_id,
+            pickUpVerification: order.deliveryVerificationCode,
+          },
+        });
+
+        // Notify the delivery group that the order is taken
+        notifyDeliveryGroup(deliveryMethod, {
+          type: 'orderTaken',
+          orderId: order._id,
+        });
+
+      } catch (error) {
+        await session.abortTransaction();
+        console.error('Error accepting order:', error);
+        let message = error.message || 'An error occurred while accepting the order.';
+        if (error.name === 'CastError') message = 'Invalid order ID.';
+        callback({
+          status: 'error',
+          message,
+          ...(error.activeOrder && { activeOrder: error.activeOrder }),
+        });
+      } finally {
+        session.endSession();
+      }
+    });
   }
 
-  // If Manager -> map socket to managerId
   if (role === 'Manager') {
     if (!managerSockets.has(userId.toString())) {
       managerSockets.set(userId.toString(), new Set());
     }
     managerSockets.get(userId.toString()).add(socket.id);
     console.log(`🏢 Manager ${userId} mapped to socket ${socket.id}`);
+    socket.emit('message', 'Welcome Manager! You are connected.');
   }
 
   // Handle disconnect
@@ -140,18 +235,19 @@ export const notifyDeliveryGroup = (deliveryMethod, message) => {
     return;
   }
   io.to(deliveryMethod).emit('deliveryMessage', message);
-  console.log(`📢 Sent message to ${deliveryMethod} group: ${message}`);
+  console.log(`📢 Sent message to ${deliveryMethod} group: ${JSON.stringify(message)}`);
 };
 
 // ================= Helper: Notify Customer =================
 export const notifyCustomer = (customerId, message) => {
-  io.to(`customer:${customerId}`).emit('customerMessage', message);
-  console.log(`📩 Sent message to customer ${customerId}`);
+  const room = `customer:${customerId.toString()}`;
+  io.to(room).emit('customerMessage', message);
+  console.log(`📩 Sent message to customer ${customerId} in room ${room}`);
 };
 
 // ================= Start Server =================
-httpServer.listen(port, () => {
-  console.log(`🚀 App running on port ${port}...`);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 App running on port ${PORT}...`);
 });
 
 process.on('unhandledRejection', (err) => {
