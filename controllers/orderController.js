@@ -722,7 +722,7 @@ export const getOrdersByDeliveryMan = async (req, res, next) => {
     const deliveryPersonId = req.user._id; // from auth middleware 
     console.log('Fetching orders for delivery person:', deliveryPersonId);
     // Find all orders assigned to this delivery person
-    const orders = await Order.findOne({deliveryId: deliveryPersonId,orderStatus:'Delivering'})
+    const orders = await Order.findOne({deliveryId: deliveryPersonId})
       .populate('userId', 'firstName phone') // only phone
       .populate('restaurantId', 'name') // only name and location
       .sort({ updatedAt: -1 });
