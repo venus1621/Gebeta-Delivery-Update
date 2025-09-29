@@ -679,7 +679,7 @@ export const getAvailableCookedOrdersCount = async (req, res, next) => {
 // POST /api/v1/orders/estimate-delivery-fee
 export const estimateDeliveryFee = async (req, res) => {
   try {
-    const { restaurantId, destination, address, vehicleType } = req.body;
+    const { restaurantId, destination, address } = req.body;
     if (!restaurantId) {
       return res.status(400).json({ message: 'restaurantId is required.' });
     }
@@ -691,27 +691,25 @@ export const estimateDeliveryFee = async (req, res) => {
       lat: restaurant.location.coordinates[1],
       lng: restaurant.location.coordinates[0],
     };
+    const carResult = await computeDeliveryFee(
+      { restaurantLocation, destinationLocation: destination, address },
+      'Car'
+    );
+    const motorResult = await computeDeliveryFee(
+      { restaurantLocation, destinationLocation: destination, address },
+      'Motor'
+    );
+    const bicycleResult = await computeDeliveryFee(
+      { restaurantLocation, destinationLocation: destination, address },
+      'Bicycle'
+    );
 
-    const allowedVehicles = ['Car', 'Motor', 'Bicycle'];
-    if (!allowedVehicles.includes((vehicleType || '').toString())) {
-      return res.status(400).json({ message: 'vehicleType must be one of Car, Motor, Bicycle.' });
-    }
-
-    const { deliveryFee, distanceKm, distanceInMeters,durationInSeconds } = await computeDeliveryFee({
-      restaurantLocation,
-      destinationLocation: destination,
-      address,
-      vehicleType,
-    });
-  
     return res.status(200).json({
       status: 'success',
       data: {
-        deliveryFee,
-        distanceKm,
-        distanceInMeters,
-        durationInSeconds,
-        vehicleType,
+        Car: carResult,
+        Motor: motorResult,
+        Bicycle: bicycleResult,
       },
     });
   } catch (err) {
