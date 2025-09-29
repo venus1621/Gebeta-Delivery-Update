@@ -717,44 +717,59 @@ export const estimateDeliveryFee = async (req, res) => {
   }
 };
 export const getOrdersByDeliveryMan = async (req, res, next) => {
-  
   try {
-    const deliveryPersonId = req.user._id; // from auth middleware 
-    console.log('Fetching orders for delivery person:', deliveryPersonId);
-    // Find all orders assigned to this delivery person
-    const orders = await Order.findOne({deliveryId: deliveryPersonId})
-      .populate('userId', 'firstName phone') // only phone
-      .populate('restaurantId', 'name') // only name and location
+    const deliveryPersonId = req.user._id; // from auth middleware
+    const { status } = req.query; // e.g. ?status=Cooked or ?status=Delivering
+
+    console.log("Fetching orders for delivery person:", deliveryPersonId, "with status:", status);
+
+    // ✅ Build query
+    const query = { deliveryId: deliveryPersonId };
+
+    // ✅ Optional status filter
+    if (status && ["Cooked", "Delivering", "Completed"].includes(status)) {
+      query.orderStatus = status;
+    }
+
+    // ✅ Fetch multiple orders
+    const orders = await Order.find(query)
+      .populate("userId", "firstName phone")
+      .populate("restaurantId", "name location")
       .sort({ updatedAt: -1 });
-     if (!orders) {
+
+    if (!orders || orders.length === 0) {
       return res.status(404).json({
-        status: 'fail',
-        message: 'No orders found for this delivery person',
+        status: "fail",
+        message: "No orders found for this delivery person",
       });
-     }  
+    }
+
+    // ✅ Transform response
+    const formattedOrders = orders.map((order) => ({
+      restaurantLocation: order.restaurantLocation,
+      destinationLocation: order.destinationLocation,
+      userName: order.userId?.firstName,
+      phone: order.userId?.phone,
+      restaurantName: order.restaurantId?.name,
+      deliveryFee: parseFloat(order.deliveryFee?.toString() || "0"),
+      tip: parseFloat(order.tip?.toString() || "0"),
+      description: order.description,
+      orderStatus: order.orderStatus,
+      orderCode: order.orderCode,
+      pickUpVerificationCode: order.deliveryVerificationCode,
+      updatedAt: order.updatedAt,
+    }));
 
     res.status(200).json({
-      status: 'success',
-      
-      data: {
-        restaurnatLocation:orders.restaurantLocation,
-        destinationLocation:orders.destinationLocation,
-        userName: orders.userId?.firstName,
-        phone: orders.userId?.phone,
-        restaurantName: orders.restaurantId?.name,
-        deliveryFee: parseFloat(orders.deliveryFee?.toString() || "0"),
-        tip: parseFloat(orders.tip?.toString() || "0"),
-        description:orders.description,
-        orderStatus: orders.orderStatus,
-        orderCode:orders.orderCode,
-        pickUpVerificationCode:orders.deliveryVerificationCode,
-      },
+      status: "success",
+      count: formattedOrders.length,
+      data: formattedOrders,
     });
   } catch (error) {
-    console.error('Error fetching delivery man orders:', error.message);
-    res.status(500).json({ message: 'Server error retrieving delivery orders' });
+    console.error("Error fetching delivery man orders:", error.message);
+    res.status(500).json({ message: "Server error retrieving delivery orders" });
   }
-}
+};
 
 export const getDeliveryOrderHistory = async (req, res, next) => {
   try {
