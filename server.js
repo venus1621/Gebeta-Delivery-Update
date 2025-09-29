@@ -141,7 +141,6 @@ io.on('connection', (socket) => {
 
         const pickUpcode= generateVerificationCode()
             const order = await Order.findById(orderId);
-            order.orderStatus="Delivering";
             order.deliveryVerificationCode=pickUpcode;
             order.deliveryId=deliveryPersonId;
             order.save();
