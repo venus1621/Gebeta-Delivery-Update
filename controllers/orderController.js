@@ -679,7 +679,7 @@ export const getAvailableCookedOrdersCount = async (req, res, next) => {
 // POST /api/v1/orders/estimate-delivery-fee
 export const estimateDeliveryFee = async (req, res) => {
   try {
-    const { restaurantId, destination, address } = req.body;
+    const { restaurantId, destination } = req.body;
     if (!restaurantId) {
       return res.status(400).json({ message: 'restaurantId is required.' });
     }
@@ -692,16 +692,16 @@ export const estimateDeliveryFee = async (req, res) => {
       lng: restaurant.location.coordinates[0],
     };
     const carResult = await computeDeliveryFee(
-      { restaurantLocation, destinationLocation: destination, address },
-      'Car'
+      { restaurantLocation, destinationLocation: destination,deliveryVehicle:'Car' },
+     
     );
     const motorResult = await computeDeliveryFee(
-      { restaurantLocation, destinationLocation: destination, address },
-      'Motor'
+      { restaurantLocation, destinationLocation: destination, deliveryVehicle:'Motor' },
+      
     );
     const bicycleResult = await computeDeliveryFee(
-      { restaurantLocation, destinationLocation: destination, address },
-      'Bicycle'
+      { restaurantLocation, destinationLocation: destination,deliveryVehicle:'Bicycle' },
+      
     );
 
     return res.status(200).json({

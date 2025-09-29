@@ -33,8 +33,6 @@ export const computeDeliveryFee = async ({ restaurantLocation, destinationLocati
   };
   const selectedRate = rateConfig[deliveryVehicle];
   if (!selectedRate) {
-    console.log('Available vehicle types:', Object.keys(rateConfig));
-    console.log('Requested vehicle type:', deliveryVehicle, 'Type:', typeof deliveryVehicle);
     throw new Error(`Invalid vehicle type: ${deliveryVehicle}. Allowed types: ${Object.keys(rateConfig).join(', ')}`);
   }
   const rawFee = selectedRate.base + selectedRate.perKm * distanceKm;
