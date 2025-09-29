@@ -28,7 +28,7 @@ import {
   editAddress,
   deleteAddress,
   setDefaultAddress,
-  addCurrentLocationAsAddress
+  saveCurrentAddress
 } from '../controllers/userController.js';
 
 import upload from '../utils/upload.js';
@@ -91,7 +91,7 @@ router.delete('/deleteMe', deleteMe);
 router.post('/addAddress', addAddressToUser);
 
 // Add current geolocation as address
-router.post('/addCurrentLocation', addCurrentLocationAsAddress);
+router.post('/saveLocation', saveCurrentAddress);
 
 // Get all addresses of current user
 router.get('/myAddresses', getMyAddresses);

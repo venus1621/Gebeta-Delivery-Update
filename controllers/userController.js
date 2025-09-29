@@ -344,11 +344,10 @@ export const setDefaultAddress = catchAsync(async (req, res, next) => {
 });
 
 // POST /api/v1/users/address/current
-export const addCurrentLocationAsAddress = catchAsync(async (req, res, next) => {
-  const userId = req.user.id;
-  const { label = 'Home', additionalInfo = '', isDefault = false } = req.body;
+export const saveCurrentAddress = catchAsync(async (req, res, next) => {
+  const userId = req.user._id;
+  const { name, additionalInfo, label, lat, lng, isDefault = false } = req.body;
 
-  const { lat, lng } = req.body.coordinates || {};
   if (!lat || !lng) {
     return next(new AppError('Latitude and longitude are required', 400));
   }
@@ -356,14 +355,9 @@ export const addCurrentLocationAsAddress = catchAsync(async (req, res, next) => 
   const user = await User.findById(userId);
   if (!user) return next(new AppError('User not found', 404));
 
-  // If this address is set as default, unset all others
-  if (isDefault) {
-    user.addresses.forEach(addr => (addr.isDefault = false));
-  }
-
-  // Save current location as an address
+  // Create address object from body
   const newAddress = {
-    name: 'Current Location',
+    name: name || "Unnamed Address", // fallback instead of hardcoding "Current Location"
     label,
     additionalInfo,
     isDefault,
@@ -371,11 +365,19 @@ export const addCurrentLocationAsAddress = catchAsync(async (req, res, next) => 
   };
 
   user.addresses.push(newAddress);
+
+  // If this is marked as default, unset others
+  if (isDefault) {
+    user.addresses.forEach(addr => {
+      if (addr !== newAddress) addr.isDefault = false;
+    });
+  }
+
   await user.save({ validateBeforeSave: false });
 
   res.status(201).json({
     status: 'success',
-    message: 'Current location saved as address',
+    message: 'Address saved successfully',
     address: newAddress,
     addresses: user.addresses
   });

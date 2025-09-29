@@ -63,9 +63,9 @@ const userSchema = new mongoose.Schema(
       },
      
     },
-   addresses: [
+addresses: [
   {
-    Name:{type:String},
+    name: { type: String, default: 'Unnamed Address' },
     label: {
       type: String,
       enum: ['Home', 'Work', 'Other'],
@@ -77,11 +77,12 @@ const userSchema = new mongoose.Schema(
       default: false
     },
     coordinates: {
-      lat: { type: Number },
-      lng: { type: Number }
+      lat: { type: Number, required: true },
+      lng: { type: Number, required: true }
     }
   }
 ]
+
 
 ,
     role: {
