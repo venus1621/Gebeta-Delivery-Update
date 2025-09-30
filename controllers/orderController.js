@@ -463,7 +463,8 @@ export const getMyOrders = async (req, res, next) => {
   try {
     const userId = req.user._id;
 
-    const orders = await Order.find({ userId })
+    const orders = await Order.find({ userId }).populate("restaurantId","name")
+
     
     res.status(200).json({
       status: "success",
