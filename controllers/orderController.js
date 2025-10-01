@@ -811,7 +811,3 @@ export const getDeliveryOrderHistory = async (req, res, next) => {
     next(error);
   }
 };
-
-
-
-

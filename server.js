@@ -138,6 +138,14 @@ io.on('connection', (socket) => {
             'You already have an active order. Complete or cancel it before accepting a new one.'
           );
         }
+        const orderVehicle = await Order.findById(orderId).deliveryVehicle;
+        if(socket.user.deliveryMethod!==orderVehicle){
+          throw new Error(
+            'You are not eligable to accept the order'
+          );
+
+        }
+        
 
         const pickUpcode= generateVerificationCode()
             const order = await Order.findById(orderId);
