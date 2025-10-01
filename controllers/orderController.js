@@ -588,9 +588,11 @@ export const getCurrentOrders = async (req, res) => {
 
 export const getCookedOrders = async (req, res, next) => {
   try {
+    const vehicleType = req.user.deliveryMethod;
     const cookedOrders = await Order.find({ 
       orderStatus: 'Cooked',
-      deliveryId: { $exists: false } // Exclude orders that already have deliveryId
+      deliveryId: { $exists: false },
+      deliveryVehicle:vehicleType
     })
       .populate('userId', 'phone') // only populate phone number
       .populate('restaurant_id', 'name location') // only populate name and location
@@ -624,10 +626,12 @@ export const getCookedOrders = async (req, res, next) => {
 // Get all available cooked orders (without delivery assignment) for delivery app
 export const getAvailableCookedOrders = async (req, res, next) => {
   try {
+     const vehicleType = req.user.deliveryMethod;
     const availableOrders = await Order.find({
       orderStatus: "Cooked",
       typeOfOrder: "Delivery",
       deliveryId: { $exists: false }, // No delivery assigned yet
+      deliveryVehicle:vehicleType
     })
       .populate("restaurantId", "name")
       .sort({ createdAt: 1 }); // FIFO (oldest first)
