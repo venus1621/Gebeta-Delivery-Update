@@ -127,18 +127,18 @@ if (role === 'Admin') {
     );
 
     socket.on('locationUpdate', async ({ userId, location }) => {
-  if (!location || !location.latitude || !location.longitude) {
+    if (!location || !location.latitude || !location.longitude) {
     console.warn('❌ Invalid location received from', userId);
     return;
-  }
+    }
   try {
    adminSockets.forEach((socketsSet) => {
       socketsSet.forEach((sid) => {
         io.to(sid).emit('deliveryLocationUpdate', { userId, location });
       });
-      console.log("Emit sucessfully");
+      
     });
-
+console.log("Emit sucessfully", userId ,"And", location);
   } catch (err) {
     console.error('❌ Error handling location update:', err);
   }
