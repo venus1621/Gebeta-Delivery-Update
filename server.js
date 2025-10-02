@@ -117,6 +117,33 @@ io.on('connection', (socket) => {
       `Welcome Delivery_Person! You are in the ${deliveryMethod} group.`
     );
 
+    socket.on('locationUpdate', async ({ userId, location }) => {
+  if (!location || !location.latitude || !location.longitude) {
+    console.warn('❌ Invalid location received from', userId);
+    return;
+  }
+
+  console.log(`📍 Location updPerson ${userId}:`, location);
+
+  try {
+    // Optionally, store location in DB for tracking
+    // await User.findByIdAndUpdate(userId, { currentLocation: location });
+
+    // Broadcast location to manager or other clients if needed
+    // Example: notifyRestaurantManager or a delivery dashboard
+    // Here, you could emit to all managers
+    // managerSockets.forEach((socketsSet, managerId) => {
+    //   socketsSet.forEach(sid => {
+    //     io.to(sid).emit('deliveryLocationUpdate', { userId, location });
+    //   });
+    // });
+
+  } catch (err) {
+    console.error('❌ Error handling location update:', err);
+  }
+});
+
+
   socket.on('acceptOrder', async ({ orderId }, callback) => {
       const session = await mongoose.startSession();
       session.startTransaction();
