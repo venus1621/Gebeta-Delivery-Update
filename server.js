@@ -136,6 +136,7 @@ if (role === 'Admin') {
       socketsSet.forEach((sid) => {
         io.to(sid).emit('deliveryLocationUpdate', { userId, location });
       });
+      console.log("Emit sucessfully");
     });
 
   } catch (err) {
