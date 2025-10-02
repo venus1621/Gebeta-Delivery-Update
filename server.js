@@ -85,13 +85,22 @@ io.on('connection', (socket) => {
   console.log(
     `🔗 User connected: ${socket.id}, Role: ${role}, UserId: ${userId}`
   );
-
+  const adminSockets = new Map();
   // Validate role
-  if (!['Customer', 'Delivery_Person', 'Manager'].includes(role)) {
+  if (!['Customer', 'Delivery_Person', 'Manager','Admin'].includes(role)) {
     socket.emit('errorMessage', 'Invalid user role.');
     socket.disconnect(true);
     return;
   }
+  // ---------------- Admin connection ----------------
+if (role === 'Admin') {
+  if (!adminSockets.has(userId.toString())) {
+    adminSockets.set(userId.toString(), new Set());
+  }
+  adminSockets.get(userId.toString()).add(socket.id);
+  console.log(`🛡️ Admin ${userId} connected on socket ${socket.id}`);
+  socket.emit('message', 'Welcome Admin! You are connected.');
+}
 
   // Role-specific logic
   if (role === 'Customer') {
@@ -122,21 +131,12 @@ io.on('connection', (socket) => {
     console.warn('❌ Invalid location received from', userId);
     return;
   }
-
-  console.log(`📍 Location updPerson ${userId}:`, location);
-
   try {
-    // Optionally, store location in DB for tracking
-    // await User.findByIdAndUpdate(userId, { currentLocation: location });
-
-    // Broadcast location to manager or other clients if needed
-    // Example: notifyRestaurantManager or a delivery dashboard
-    // Here, you could emit to all managers
-    // managerSockets.forEach((socketsSet, managerId) => {
-    //   socketsSet.forEach(sid => {
-    //     io.to(sid).emit('deliveryLocationUpdate', { userId, location });
-    //   });
-    // });
+   adminSockets.forEach((socketsSet) => {
+      socketsSet.forEach((sid) => {
+        io.to(sid).emit('deliveryLocationUpdate', { userId, location });
+      });
+    });
 
   } catch (err) {
     console.error('❌ Error handling location update:', err);
@@ -241,6 +241,13 @@ io.on('connection', (socket) => {
         managerSockets.delete(userId.toString());
       }
     }
+
+    if (role === 'Admin' && adminSockets.has(userId.toString())) {
+    adminSockets.get(userId.toString()).delete(socket.id);
+    if (adminSockets.get(userId.toString()).size === 0) {
+      adminSockets.delete(userId.toString());
+    }
+  }
   });
 });
 
