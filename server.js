@@ -78,6 +78,10 @@ io.use(authenticateSocket);
 // managerId -> Set of socketIds
 const managerSockets = new Map();
 
+// ================= Track Admin Connections =================
+// adminId -> Set of socketIds
+const adminSockets = new Map();
+
 // ================= Handle Connections by Role =================
 io.on('connection', (socket) => {
   const { _id: userId, role, deliveryMethod } = socket.user;
@@ -85,22 +89,23 @@ io.on('connection', (socket) => {
   console.log(
     `🔗 User connected: ${socket.id}, Role: ${role}, UserId: ${userId}`
   );
-  const adminSockets = new Map();
+
   // Validate role
   if (!['Customer', 'Delivery_Person', 'Manager','Admin'].includes(role)) {
     socket.emit('errorMessage', 'Invalid user role.');
     socket.disconnect(true);
     return;
   }
+
   // ---------------- Admin connection ----------------
-if (role === 'Admin') {
-  if (!adminSockets.has(userId.toString())) {
-    adminSockets.set(userId.toString(), new Set());
+  if (role === 'Admin') {
+    if (!adminSockets.has(userId.toString())) {
+      adminSockets.set(userId.toString(), new Set());
+    }
+    adminSockets.get(userId.toString()).add(socket.id);
+    console.log(`🛡️ Admin ${userId} connected on socket ${socket.id}`);
+    socket.emit('message', 'Welcome Admin! You are connected.');
   }
-  adminSockets.get(userId.toString()).add(socket.id);
-  console.log(`🛡️ Admin ${userId} connected on socket ${socket.id}`);
-  socket.emit('message', 'Welcome Admin! You are connected.');
-}
 
   // Role-specific logic
   if (role === 'Customer') {
@@ -126,26 +131,32 @@ if (role === 'Admin') {
       `Welcome Delivery_Person! You are in the ${deliveryMethod} group.`
     );
 
-    socket.on('locationUpdate', async ({ userId, location }) => {
-    if (!location || !location.latitude || !location.longitude) {
-    console.warn('❌ Invalid location received from', userId);
-    return;
-    }
-  try {
-   adminSockets.forEach((socketsSet) => {
-      socketsSet.forEach((sid) => {
-        io.to(sid).emit('deliveryLocationUpdate', { userId, location });
-      });
-      
+    // 📍 Handle location updates from delivery person and forward to admins
+    socket.on('locationUpdate', async ({ userId: receivedUserId, location }) => {
+      if (!location || !location.latitude || !location.longitude) {
+        console.warn('❌ Invalid location received from', receivedUserId);
+        return;
+      }
+
+      try {
+        // Forward location to all connected admin sockets
+        adminSockets.forEach((socketsSet) => {
+          socketsSet.forEach((sid) => {
+            io.to(sid).emit('deliveryLocationUpdate', { 
+              userId: receivedUserId, 
+              location,
+              deliveryPersonId: socket.user._id // Include the delivery person ID for reference
+            });
+          });
+        });
+
+        console.log(`📍 Location update emitted successfully for user ${receivedUserId}:`, location);
+      } catch (err) {
+        console.error('❌ Error handling location update:', err);
+      }
     });
-console.log("Emit sucessfully", userId ,"And", location);
-  } catch (err) {
-    console.error('❌ Error handling location update:', err);
-  }
-});
 
-
-  socket.on('acceptOrder', async ({ orderId }, callback) => {
+    socket.on('acceptOrder', async ({ orderId }, callback) => {
       const session = await mongoose.startSession();
       session.startTransaction();
       try {
@@ -166,25 +177,26 @@ console.log("Emit sucessfully", userId ,"And", location);
             'You already have an active order. Complete or cancel it before accepting a new one.'
           );
         }
-        const orderVehicle = await Order.findById(orderId).deliveryVehicle;
-        if(socket.user.deliveryMethod!==orderVehicle){
-          throw new Error(
-            'You are not eligable to accept the order'
-          );
 
-        }
-        
-
-        const pickUpcode= generateVerificationCode()
-            const order = await Order.findById(orderId);
-            order.deliveryVerificationCode=pickUpcode;
-            order.deliveryId=deliveryPersonId;
-            order.save();
-
+        // Fetch order to check deliveryVehicle
+        const order = await Order.findById(orderId).session(session);
         if (!order) {
           throw new Error('Order is not available for acceptance.');
         }
 
+        const orderVehicle = order.deliveryVehicle;
+        if (socket.user.deliveryMethod !== orderVehicle) {
+          throw new Error(
+            'You are not eligible to accept the order'
+          );
+        }
+
+        // Generate verification code and update order
+        const pickUpcode = generateVerificationCode();
+        order.deliveryVerificationCode = pickUpcode;
+        order.deliveryId = deliveryPersonId;
+        order.orderStatus = 'Accepted'; // Update status to Accepted
+        await order.save({ session });
 
         await session.commitTransaction();
 
@@ -193,19 +205,20 @@ console.log("Emit sucessfully", userId ,"And", location);
           status: 'success',
           message: `Order ${order.order_id} accepted.`,
           data: {
-        restaurantLocation:order.restaurantLocation,
-        deliverLocation:order.destinationLocation,
-        deliveryFee:parseFloat( order.deliveryFee?.toString() || "0"),
-        tip:parseFloat( order.tip?.toString() || "0"),
-        distanceKm:order.distanceKm,
-        description:order.description,
-        status:order.orderStatus,
-        orderCode:order.orderCode,
-        pickUpVerification: order.deliveryVerificationCode,
-  
-            },
+            restaurantLocation: order.restaurantLocation,
+            deliverLocation: order.destinationLocation,
+            deliveryFee: parseFloat(order.deliveryFee?.toString() || "0"),
+            tip: parseFloat(order.tip?.toString() || "0"),
+            distanceKm: order.distanceKm,
+            description: order.description,
+            status: order.orderStatus,
+            orderCode: order.orderCode,
+            pickUpVerification: order.deliveryVerificationCode,
+          },
         });
 
+        // Broadcast to other delivery persons that order is accepted
+        io.to(deliveryMethod).emit('order:accepted', { orderId: order._id, orderCode: order.orderCode });
 
       } catch (error) {
         await session.abortTransaction();
@@ -244,11 +257,11 @@ console.log("Emit sucessfully", userId ,"And", location);
     }
 
     if (role === 'Admin' && adminSockets.has(userId.toString())) {
-    adminSockets.get(userId.toString()).delete(socket.id);
-    if (adminSockets.get(userId.toString()).size === 0) {
-      adminSockets.delete(userId.toString());
+      adminSockets.get(userId.toString()).delete(socket.id);
+      if (adminSockets.get(userId.toString()).size === 0) {
+        adminSockets.delete(userId.toString());
+      }
     }
-  }
   });
 });
 
