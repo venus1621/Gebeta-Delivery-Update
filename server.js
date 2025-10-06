@@ -149,7 +149,18 @@ io.on('connection', (socket) => {
             });
           });
         });
-
+        console.log("acctivve orders..............................")
+        console.log(socket.activeOrder);
+         // 2️⃣ NEW: Forward to the customer whose order this delivery person accepted
+    if (socket.activeOrder?.customerId) {
+      const customerRoom = `customer:${socket.activeOrder.customerId}`;
+      io.to(customerRoom).emit('deliveryLocationUpdate', {
+        deliveryPersonId: socket.user._id,
+        location,
+        orderId: socket.activeOrder.orderId,
+      });
+      console.log(`📍 Location update sent to customer ${socket.activeOrder.customerId}`);
+    }
         console.log(`📍 Location update emitted successfully for user ${receivedUserId}:`, location);
       } catch (err) {
         console.error('❌ Error handling location update:', err);
@@ -215,10 +226,7 @@ io.on('connection', (socket) => {
             orderCode: order.orderCode,
             pickUpVerification: order.deliveryVerificationCode,
           },
-        });
-
-        // Broadcast to other delivery persons that order is accepted
-        io.to(deliveryMethod).emit('order:accepted', { orderId: order._id, orderCode: order.orderCode });
+        });  
 
       } catch (error) {
         await session.abortTransaction();

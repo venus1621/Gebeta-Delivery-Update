@@ -192,6 +192,7 @@ export const updateOrderStatus = async (req, res, next) => {
             deliveryFee: parseFloat(order.deliveryFee.toString()),
             tip: parseFloat(order.tip?.toString() || "0"),
             createdAt: order.createdAt,
+            customer:order.userId
       })
       }
     res.status(200).json({
