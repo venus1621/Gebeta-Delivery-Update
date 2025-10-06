@@ -50,9 +50,6 @@ const io = new Server(httpServer, {
   },
 });
 
-// NEW: Attach io to app for access in REST controllers
-app.set('io', io);
-
 // ================= JWT Validation Middleware =================
 const authenticateSocket = async (socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -84,10 +81,6 @@ const managerSockets = new Map();
 // ================= Track Admin Connections =================
 // adminId -> Set of socketIds
 const adminSockets = new Map();
-
-// ================= Track Delivery Person Connections =================
-// NEW: deliveryId -> Set of socketIds (for notifying specific delivery persons)
-const deliverySockets = new Map();
 
 // ================= Handle Connections by Role =================
 io.on('connection', (socket) => {
@@ -132,12 +125,6 @@ io.on('connection', (socket) => {
       return;
     }
     socket.join(deliveryMethod);
-    // NEW: Track delivery sockets
-    if (!deliverySockets.has(userId.toString())) {
-      deliverySockets.set(userId.toString(), new Set());
-    }
-    deliverySockets.get(userId.toString()).add(socket.id);
-    console.log(`🚚 Delivery person ${userId} mapped to socket ${socket.id}`);
     console.log(`🚚 Delivery person ${userId} joined ${deliveryMethod} group`);
     socket.emit(
       'message',
@@ -162,19 +149,17 @@ io.on('connection', (socket) => {
             });
           });
         });
-        console.log("active orders..............................")
+        console.log("acctivve orders..............................")
         console.log(socket.activeOrder);
-         // UPDATED: Forward to the customer using notifyCustomer helper
+         // 2️⃣ NEW: Forward to the customer whose order this delivery person accepted
     if (socket.activeOrder?.customerId) {
-      notifyCustomer(socket.activeOrder.customerId, {
-        event: 'deliveryLocationUpdate',
-        data: {
-          deliveryPersonId: socket.user._id,
-          location,
-          orderId: socket.activeOrder.orderId,
-        }
+      const customerRoom = `customer:${socket.activeOrder.customerId}`;
+      io.to(customerRoom).emit('deliveryLocationUpdate', {
+        deliveryPersonId: socket.user._id,
+        location,
+        orderId: socket.activeOrder.orderId,
       });
-      console.log(`📍 Location update sent to customer ${socket.activeOrder.customerId} via notifyCustomer`);
+      console.log(`📍 Location update sent to customer ${socket.activeOrder.customerId}`);
     }
         console.log(`📍 Location update emitted successfully for user ${receivedUserId}:`, location);
       } catch (err) {
@@ -182,88 +167,81 @@ io.on('connection', (socket) => {
       }
     });
 
-   socket.on('acceptOrder', async ({ orderId }, callback) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  try {
-    const deliveryPersonId = socket.user._id;
+    socket.on('acceptOrder', async ({ orderId }, callback) => {
+      const session = await mongoose.startSession();
+      session.startTransaction();
+      try {
+        const deliveryPersonId = socket.user._id;
 
-    if (!orderId) {
-      throw new Error('Order ID is required.');
-    }
+        if (!orderId) {
+          throw new Error('Order ID is required.');
+        }
 
-    // Check if delivery person already has an active order
-    const existingOrder = await Order.findOne({
-      deliveryId: deliveryPersonId,
-      orderStatus: { $nin: ['Completed', 'Cancelled'] },
-    }).session(session);
+        // Check if delivery person already has an active order
+        const existingOrder = await Order.findOne({
+          deliveryId: deliveryPersonId,
+          orderStatus: { $nin: ['Completed', 'Cancelled'] },
+        }).session(session);
 
-    if (existingOrder) {
-      throw new Error(
-        'You already have an active order. Complete or cancel it before accepting a new one.'
-      );
-    }
+        if (existingOrder) {
+          throw new Error(
+            'You already have an active order. Complete or cancel it before accepting a new one.'
+          );
+        }
 
-    // Fetch order to check deliveryVehicle
-    const order = await Order.findById(orderId).session(session);
-    if (!order) {
-      throw new Error('Order is not available for acceptance.');
-    }
+        // Fetch order to check deliveryVehicle
+        const order = await Order.findById(orderId).session(session);
+        if (!order) {
+          throw new Error('Order is not available for acceptance.');
+        }
 
-    const orderVehicle = order.deliveryVehicle;
-    if (socket.user.deliveryMethod !== orderVehicle) {
-      throw new Error('You are not eligible to accept the order');
-    }
+        const orderVehicle = order.deliveryVehicle;
+        if (socket.user.deliveryMethod !== orderVehicle) {
+          throw new Error(
+            'You are not eligible to accept the order'
+          );
+        }
 
-    // Generate verification code and update order
-    const pickUpcode = generateVerificationCode();
-    order.deliveryVerificationCode = pickUpcode;
-    order.deliveryId = deliveryPersonId;
-    order.orderStatus = 'Accepted'; // Update status to Accepted
-    await order.save({ session });
+        // Generate verification code and update order
+        const pickUpcode = generateVerificationCode();
+        order.deliveryVerificationCode = pickUpcode;
+        order.deliveryId = deliveryPersonId;
+        order.orderStatus = 'Accepted'; // Update status to Accepted
+        await order.save({ session });
 
-    await session.commitTransaction();
+        await session.commitTransaction();
 
-    // Set the active order on the socket (with validation for userId)
-    if (!order.userId) {
-      throw new Error('Order is missing userId (customer reference).');
-    }
-    socket.activeOrder = {
-      customerId: order.userId,
-      deliveryPersonId: order.deliveryId,
-      orderId: order._id,
-    };
+        // Success response back to this delivery person
+        callback({
+          status: 'success',
+          message: `Order ${order.order_id} accepted.`,
+          data: {
+            restaurantLocation: order.restaurantLocation,
+            deliverLocation: order.destinationLocation,
+            deliveryFee: parseFloat(order.deliveryFee?.toString() || "0"),
+            tip: parseFloat(order.tip?.toString() || "0"),
+            distanceKm: order.distanceKm,
+            description: order.description,
+            status: order.orderStatus,
+            orderCode: order.orderCode,
+            pickUpVerification: order.deliveryVerificationCode,
+          },
+        });  
 
-    // Success response back to this delivery person
-    callback({
-      status: 'success',
-      message: `Order ${order.order_id} accepted.`,
-      data: {
-        restaurantLocation: order.restaurantLocation,
-        deliverLocation: order.destinationLocation,
-        deliveryFee: parseFloat(order.deliveryFee?.toString() || "0"),
-        tip: parseFloat(order.tip?.toString() || "0"),
-        distanceKm: order.distanceKm,
-        description: order.description,
-        status: order.orderStatus,
-        orderCode: order.orderCode,
-        pickUpVerification: order.deliveryVerificationCode,
-      },
+      } catch (error) {
+        await session.abortTransaction();
+        console.error('Error accepting order:', error);
+        let message = error.message || 'An error occurred while accepting the order.';
+        if (error.name === 'CastError') message = 'Invalid order ID.';
+        callback({
+          status: 'error',
+          message,
+          ...(error.activeOrder && { activeOrder: error.activeOrder }),
+        });
+      } finally {
+        session.endSession();
+      }
     });
-
-  } catch (error) {
-    await session.abortTransaction();
-    console.error('Error accepting order:', error);
-    let message = error.message || 'An error occurred while accepting the order.';
-    if (error.name === 'CastError') message = 'Invalid order ID.';
-    callback({
-      status: 'error',
-      message,
-    });
-  } finally {
-    session.endSession();
-  }
-});
   }
 
   if (role === 'Manager') {
@@ -290,20 +268,6 @@ io.on('connection', (socket) => {
       adminSockets.get(userId.toString()).delete(socket.id);
       if (adminSockets.get(userId.toString()).size === 0) {
         adminSockets.delete(userId.toString());
-      }
-    }
-
-    // NEW: Handle Delivery_Person disconnect
-    if (role === 'Delivery_Person' && deliverySockets.has(userId.toString())) {
-      deliverySockets.get(userId.toString()).delete(socket.id);
-      if (deliverySockets.get(userId.toString()).size === 0) {
-        deliverySockets.delete(userId.toString());
-      }
-      // Clear activeOrder on disconnect to prevent stale data
-      if (socket.activeOrder) {
-        console.log(`⚠️ Clearing active order ${socket.activeOrder.orderId} due to disconnect for ${userId}`);
-        socket.activeOrder = null;
-        // Optionally: Reassign or cancel the order in DB here if needed
       }
     }
   });
@@ -337,19 +301,6 @@ export const notifyCustomer = (customerId, message) => {
   const room = `customer:${customerId.toString()}`;
   io.to(room).emit('customerMessage', message);
   console.log(`📩 Sent message to customer ${customerId} in room ${room}`);
-};
-
-// ================= Helper: Notify Delivery Person =================
-export const notifyDeliveryPerson = (deliveryPersonId, message) => {
-  const sockets = deliverySockets.get(deliveryPersonId.toString());
-  if (sockets && sockets.size > 0) {
-    sockets.forEach((sid) => {
-      io.to(sid).emit('deliveryMessage', message);
-    });
-    console.log(`✅ Notified delivery person ${deliveryPersonId} on ${sockets.size} device(s)`);
-  } else {
-    console.log(`⚠️ Delivery person ${deliveryPersonId} is not connected`);
-  }
 };
 
 // ================= Start Server =================
