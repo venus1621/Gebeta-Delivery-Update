@@ -815,3 +815,46 @@ export const getDeliveryOrderHistory = async (req, res, next) => {
     next(error);
   }
 };
+
+
+
+export const getOrdersByStatus = async (req, res) => {
+  try {
+    const { status } = req.params;
+
+    // Allowed statuses from schema
+    const allowedStatuses = [
+      "Pending",
+      "Preparing",
+      "Cooked",
+      "Delivering",
+      "Completed",
+      "Cancelled"
+    ];
+
+    let filter = {};
+
+    if (status && status !== "all") {
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ message: `Invalid status: ${status}` });
+      }
+      filter.orderStatus = status;
+    }
+
+    // Fetch orders (pre-find hook ensures only Paid transactions)
+    const orders = await Order.find(filter)
+      .populate("userId", "name email")
+      .populate("restaurantId", "name location")
+      .populate("orderItems.foodId", "foodName image price")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      count: orders.length,
+      orders,
+    });
+  } catch (error) {
+    console.error("Error fetching orders by status:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
