@@ -211,7 +211,6 @@ io.on('connection', (socket) => {
         const pickUpcode = generateVerificationCode();
         order.deliveryVerificationCode = pickUpcode;
         order.deliveryId = deliveryPersonId;
-        order.orderStatus = 'Accepted'; // Update status to Accepted
         await order.save({ session });
 
         await session.commitTransaction();
