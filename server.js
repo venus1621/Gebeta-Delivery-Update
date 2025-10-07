@@ -132,36 +132,41 @@ io.on('connection', (socket) => {
     );
 
     // 📍 Handle location updates from delivery person and forward to admins
-    socket.on('locationUpdate', async ({ userId: receivedUserId, location }) => {
+    socket.on('locationUpdate', async ({ location }) => {
       if (!location || !location.latitude || !location.longitude) {
-        console.warn('❌ Invalid location received from', receivedUserId);
+        console.warn('❌ Invalid location received from', socket.user._id);
         return;
       }
 
       try {
+        const deliveryPersonId = socket.user._id;
+
         // Forward location to all connected admin sockets
         adminSockets.forEach((socketsSet) => {
           socketsSet.forEach((sid) => {
             io.to(sid).emit('deliveryLocationUpdate', { 
-              userId: receivedUserId, 
+              userId: deliveryPersonId,
               location,
-              deliveryPersonId: socket.user._id // Include the delivery person ID for reference
+              deliveryPersonId
             });
           });
         });
-        console.log("acctivve orders..............................")
+
+        console.log("active orders..............................");
         console.log(socket.activeOrder);
-         // 2️⃣ NEW: Forward to the customer whose order this delivery person accepted
-    if (socket.activeOrder?.customerId) {
-      const customerRoom = `customer:${socket.activeOrder.customerId}`;
-      io.to(customerRoom).emit('deliveryLocationUpdate', {
-        deliveryPersonId: socket.user._id,
-        location,
-        orderId: socket.activeOrder.orderId,
-      });
-      console.log(`📍 Location update sent to customer ${socket.activeOrder.customerId}`);
-    }
-        console.log(`📍 Location update emitted successfully for user ${receivedUserId}:`, location);
+        
+        // FIX: Use userId instead of customerId
+        // 2️⃣ Forward to the customer whose order this delivery person accepted
+        if (socket.activeOrder?.userId) {
+          const customerRoom = `customer:${socket.activeOrder.userId}`;
+          io.to(customerRoom).emit('deliveryLocationUpdate', {
+            deliveryPersonId,
+            location,
+            orderId: socket.activeOrder.orderId,
+          });
+          console.log(`📍 Location update sent to customer ${socket.activeOrder.userId}`);
+        }
+        console.log(`📍 Location update emitted successfully for user ${deliveryPersonId}:`, location);
       } catch (err) {
         console.error('❌ Error handling location update:', err);
       }
@@ -211,6 +216,20 @@ io.on('connection', (socket) => {
 
         await session.commitTransaction();
 
+        // FIX: Set socket.activeOrder for location forwarding – use userId
+        socket.activeOrder = {
+          orderId,
+          userId: order.userId  // Assumes userId field exists; populate if ref
+        };
+
+        // FIX: Notify customer of acceptance – use userId
+        notifyCustomer(order.userId, {
+          type: 'orderAccepted',
+          orderId,
+          deliveryPersonId,
+          message: `Your order ${order.order_id} has been accepted by a delivery person!`
+        });
+
         // Success response back to this delivery person
         callback({
           status: 'success',
@@ -242,6 +261,19 @@ io.on('connection', (socket) => {
         session.endSession();
       }
     });
+
+    // Stub for completing order – clears activeOrder
+    socket.on('completeOrder', async ({ orderId }, callback) => {
+      try {
+        // Add your completion logic here (update order status, etc.)
+        if (socket.activeOrder?.orderId === orderId) {
+          delete socket.activeOrder;  // Clear active order
+        }
+        callback({ status: 'success', message: 'Order completed.' });
+      } catch (error) {
+        callback({ status: 'error', message: error.message });
+      }
+    });
   }
 
   if (role === 'Manager') {
@@ -256,6 +288,12 @@ io.on('connection', (socket) => {
   // Handle disconnect
   socket.on('disconnect', () => {
     console.log(`❌ User disconnected: ${socket.id}`);
+
+    // Clear activeOrder on disconnect for delivery persons
+    if (role === 'Delivery_Person' && socket.activeOrder) {
+      console.log(`⚠️ Clearing activeOrder for disconnected delivery person ${userId}`);
+      delete socket.activeOrder;
+    }
 
     if (role === 'Manager' && managerSockets.has(userId.toString())) {
       managerSockets.get(userId.toString()).delete(socket.id);
