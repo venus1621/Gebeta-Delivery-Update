@@ -35,11 +35,53 @@ if (!JWT_SECRET) {
 
 mongoose
   .connect(DB)
-  .then(() => console.log('✅ DB connection successful!'))
+  .then(async () => {
+    console.log('✅ DB connection successful!');
+    
+    // Populate activeDeliveryOrders from DB on startup
+    await populateActiveOrders();
+  })
   .catch((err) => {
     console.error('DB connection error:', err.message);
     process.exit(1);
   });
+
+// ================= Function to Fetch and Populate Active Orders =================
+const populateActiveOrders = async () => {
+  try {
+    // Fetch all orders in 'Delivering' status
+    const activeOrders = await Order.find({
+      orderStatus: 'Delivering',
+      deliveryId: { $exists: true, $ne: null }
+    }).populate('userId', '_id').select('_id deliveryId userId orderStatus');
+
+    activeOrders.forEach((order) => {
+      if (order.deliveryId && order.userId) {
+        const deliveryPersonIdStr = order.deliveryId.toString();
+        activeDeliveryOrders.set(deliveryPersonIdStr, {
+          orderId: order._id.toString(),
+          userId: order.userId._id.toString()
+        });
+        console.log(`💾 Loaded active order ${order._id} for delivery person ${deliveryPersonIdStr}`);
+      }
+    });
+
+    console.log(`✅ Loaded ${activeOrders.length} active delivering orders into memory`);
+
+    // Request location updates from connected delivery persons for active orders
+    for (const deliveryPersonIdStr of activeDeliveryOrders.keys()) {
+      const sockets = deliverySockets.get(deliveryPersonIdStr);
+      if (sockets && sockets.size > 0) {
+        sockets.forEach((sid) => {
+          io.to(sid).emit('requestLocationUpdate', { reason: 'serverRestartActiveOrder' });
+        });
+        console.log(`📡 Requested location update from connected delivery person ${deliveryPersonIdStr} for active order`);
+      }
+    }
+  } catch (err) {
+    console.error('❌ Error populating active orders:', err);
+  }
+};
 
 const httpServer = http.createServer(app);
 
@@ -49,6 +91,18 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
   },
 });
+
+// ================= Global Active Orders Tracking =================
+// deliveryPersonId (string) -> { orderId: string, userId: string (customer _id) }
+const activeDeliveryOrders = new Map();
+
+// ================= Global Last Locations Tracking =================
+// deliveryPersonId (string) -> location object
+const lastDeliveryLocations = new Map();
+
+// ================= Track Delivery Person Connections =================
+// deliveryId -> Set of socketIds
+const deliverySockets = new Map();
 
 // ================= JWT Validation Middleware =================
 const authenticateSocket = async (socket, next) => {
@@ -125,13 +179,32 @@ io.on('connection', (socket) => {
       return;
     }
     socket.join(deliveryMethod);
+
+    // Track delivery sockets
+    if (!deliverySockets.has(userId.toString())) {
+      deliverySockets.set(userId.toString(), new Set());
+    }
+    deliverySockets.get(userId.toString()).add(socket.id);
+
     console.log(`🚚 Delivery person ${userId} joined ${deliveryMethod} group`);
     socket.emit(
       'message',
       `Welcome Delivery_Person! You are in the ${deliveryMethod} group.`
     );
 
-    // 📍 Handle location updates from delivery person and forward to admins
+    // Restore active order on connect/reconnect
+    const userIdStr = userId.toString();
+    if (activeDeliveryOrders.has(userIdStr)) {
+      socket.activeOrder = activeDeliveryOrders.get(userIdStr);
+      console.log(`🔄 Restored active order ${socket.activeOrder.orderId} for reconnecting delivery person ${userId}`);
+      // Request initial location update for the customer
+      socket.emit('requestLocationUpdate', { reason: 'activeOrderRestored' });
+      console.log(`📡 Requested location update from ${userId} for active order`);
+    } else {
+      console.log(`ℹ️ No active order found for delivery person ${userId} on connect`);
+    }
+
+    // 📍 Handle location updates from delivery person and forward to admins/customers
     socket.on('locationUpdate', async ({ location }) => {
       if (!location || !location.latitude || !location.longitude) {
         console.warn('❌ Invalid location received from', socket.user._id);
@@ -139,7 +212,16 @@ io.on('connection', (socket) => {
       }
 
       try {
-        const deliveryPersonId = socket.user._id;
+        const deliveryPersonId = socket.user._id.toString();
+
+        // Store last location
+        lastDeliveryLocations.set(deliveryPersonId, location);
+
+        // Fallback to global if socket prop is missing (e.g., reconnect)
+        if (!socket.activeOrder && activeDeliveryOrders.has(deliveryPersonId)) {
+          socket.activeOrder = activeDeliveryOrders.get(deliveryPersonId);
+          console.log(`🔄 Synced activeOrder from global for ${deliveryPersonId}`);
+        }
 
         // Forward location to all connected admin sockets
         adminSockets.forEach((socketsSet) => {
@@ -152,11 +234,7 @@ io.on('connection', (socket) => {
           });
         });
 
-        console.log("active orders..............................");
-        console.log(socket.activeOrder);
-        
-        // FIX: Use userId instead of customerId
-        // 2️⃣ Forward to the customer whose order this delivery person accepted
+        // Forward to the customer if active order exists
         if (socket.activeOrder?.userId) {
           const customerRoom = `customer:${socket.activeOrder.userId}`;
           io.to(customerRoom).emit('deliveryLocationUpdate', {
@@ -164,9 +242,12 @@ io.on('connection', (socket) => {
             location,
             orderId: socket.activeOrder.orderId,
           });
-          console.log(`📍 Location update sent to customer ${socket.activeOrder.userId}`);
+          console.log(`📍 Location update sent to customer ${socket.activeOrder.userId} for order ${socket.activeOrder.orderId}`);
+        } else {
+          console.debug(`ℹ️ No active order for ${deliveryPersonId} – skipping customer notify`);
         }
-        console.log(`📍 Location update emitted successfully for user ${deliveryPersonId}:`, location);
+
+        console.log(`📍 Location update emitted successfully for delivery person ${deliveryPersonId}`);
       } catch (err) {
         console.error('❌ Error handling location update:', err);
       }
@@ -194,8 +275,10 @@ io.on('connection', (socket) => {
           );
         }
 
-        // Fetch order to check deliveryVehicle
-        const order = await Order.findById(orderId).session(session);
+        // Fetch order with userId populated and check deliveryVehicle
+        const order = await Order.findById(orderId)
+          .populate('userId', '_id')  // Populate userId field to get order.userId._id
+          .session(session);
         if (!order) {
           throw new Error('Order is not available for acceptance.');
         }
@@ -215,24 +298,29 @@ io.on('connection', (socket) => {
 
         await session.commitTransaction();
 
-        // FIX: Set socket.activeOrder for location forwarding – use userId
-        socket.activeOrder = {
+        // Persist globally and sync to socket
+        const activeOrderData = {
           orderId,
-          userId: order.userId  // Assumes userId field exists; populate if ref
+          userId: order.userId._id.toString()  // Use populated _id as string for room key
         };
+        activeDeliveryOrders.set(deliveryPersonId.toString(), activeOrderData);
+        socket.activeOrder = activeOrderData;
 
-        // FIX: Notify customer of acceptance – use userId
-        notifyCustomer(order.userId, {
+        // Request location update after acceptance
+        socket.emit('requestLocationUpdate', { reason: 'orderAccepted' });
+
+        // Notify customer of acceptance
+        notifyCustomer(order.userId._id.toString(), {
           type: 'orderAccepted',
           orderId,
           deliveryPersonId,
-          message: `Your order ${order.order_id} has been accepted by a delivery person!`
+          message: `Your order ${order.orderCode} has been accepted by a delivery person!`
         });
 
         // Success response back to this delivery person
         callback({
           status: 'success',
-          message: `Order ${order.order_id} accepted.`,
+          message: `Order ${order.orderCode} accepted.`,
           data: {
             restaurantLocation: order.restaurantLocation,
             deliverLocation: order.destinationLocation,
@@ -261,16 +349,46 @@ io.on('connection', (socket) => {
       }
     });
 
-    // Stub for completing order – clears activeOrder
+    // Updated completeOrder handler
     socket.on('completeOrder', async ({ orderId }, callback) => {
+      const session = await mongoose.startSession();
+      session.startTransaction();
       try {
-        // Add your completion logic here (update order status, etc.)
-        if (socket.activeOrder?.orderId === orderId) {
-          delete socket.activeOrder;  // Clear active order
+        const order = await Order.findById(orderId).populate('userId', '_id').session(session);
+        if (!order || order.deliveryId.toString() !== socket.user._id.toString()) {
+          throw new Error('Cannot complete this order.');
         }
+        order.orderStatus = 'Completed';
+        await order.save({ session });
+        await session.commitTransaction();
+        
+        // Clear globally and locally
+        const deliveryPersonIdStr = socket.user._id.toString();
+        activeDeliveryOrders.delete(deliveryPersonIdStr);
+        lastDeliveryLocations.delete(deliveryPersonIdStr);  // Clear last location
+        delete socket.activeOrder;
+        
+        // Notify customer and admins
+        notifyCustomer(order.userId._id.toString(), { 
+          type: 'orderCompleted', 
+          orderId,
+          message: `Your order ${order.orderCode} has been completed!`
+        });
+        adminSockets.forEach((socketsSet) => {
+          socketsSet.forEach((sid) => {
+            io.to(sid).emit('orderCompleted', { 
+              orderId, 
+              deliveryPersonId: socket.user._id 
+            });
+          });
+        });
+        
         callback({ status: 'success', message: 'Order completed.' });
       } catch (error) {
+        await session.abortTransaction();
         callback({ status: 'error', message: error.message });
+      } finally {
+        session.endSession();
       }
     });
   }
@@ -288,10 +406,22 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`❌ User disconnected: ${socket.id}`);
 
-    // Clear activeOrder on disconnect for delivery persons
-    if (role === 'Delivery_Person' && socket.activeOrder) {
-      console.log(`⚠️ Clearing activeOrder for disconnected delivery person ${userId}`);
-      delete socket.activeOrder;
+    // Clear activeOrder and track on disconnect for delivery persons
+    if (role === 'Delivery_Person') {
+      if (socket.activeOrder) {
+        console.log(`⚠️ Clearing activeOrder for disconnected delivery person ${userId}`);
+        activeDeliveryOrders.delete(userId.toString());  // Clear global
+        lastDeliveryLocations.delete(userId.toString());  // Clear last location
+        delete socket.activeOrder;
+      }
+
+      // Remove from deliverySockets
+      if (deliverySockets.has(userId.toString())) {
+        deliverySockets.get(userId.toString()).delete(socket.id);
+        if (deliverySockets.get(userId.toString()).size === 0) {
+          deliverySockets.delete(userId.toString());
+        }
+      }
     }
 
     if (role === 'Manager' && managerSockets.has(userId.toString())) {
@@ -335,7 +465,7 @@ export const notifyDeliveryGroup = (deliveryMethod, message) => {
 
 // ================= Helper: Notify Customer =================
 export const notifyCustomer = (customerId, message) => {
-  const room = `customer:${customerId.toString()}`;
+  const room = `customer:${customerId}`;
   io.to(room).emit('customerMessage', message);
   console.log(`📩 Sent message to customer ${customerId} in room ${room}`);
 };
