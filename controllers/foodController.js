@@ -5,19 +5,10 @@ import FoodMenu from '../models/FoodMenu.js';
 import Restaurant from '../models/restaurantModel.js';
 import AppError from '../utils/appError.js';
 import catchAsync from '../utils/catchAsync.js';
-import cloudinary from '../utils/cloudinary.js';
-import streamifier from 'streamifier';
 
-// Upload image buffer to Cloudinary  
-const uploadFromBuffer = (fileBuffer, folder = 'food_images') => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream({ folder }, (error, result) => {
-      if (error) return reject(error);
-      resolve(result);
-    });
-    streamifier.createReadStream(fileBuffer).pipe(stream);
-  });
-};
+import { uploadImageToCloudinary } from '../utils/cloudinary.js'; // ✅ Import utility
+
+
 
 // Get foods by menuId
 export const getFoodsByMenuId = catchAsync(async (req, res, next) => {
@@ -42,16 +33,6 @@ export const getFoodsByMenuId = catchAsync(async (req, res, next) => {
   });
 });
 
-// Middleware: attach image URL to req.body.image
-export const uploadFoodImageToCloudinary = catchAsync(async (req, res, next) => {
-  if (!req.file) return next();
-
-  const result = await uploadFromBuffer(req.file.buffer);
-  req.body.image = result.secure_url;
-
-  next();
-});
-
 // Validate manager/admin ownership of menu
 const checkManagerAccess = async (menuId, user) => {
   const menu = await FoodMenu.findById(menuId);
@@ -70,12 +51,31 @@ const checkManagerAccess = async (menuId, user) => {
 // Create a new food item
 export const createFood = catchAsync(async (req, res, next) => {
   const { menuId } = req.body;
+
+  // 1️⃣ Check manager access
   await checkManagerAccess(menuId, req.user);
 
-  const newFood = await Food.create(req.body);
+  // 2️⃣ If an image is uploaded, send to Cloudinary
+  if (req.file) {
+    const result = await uploadImageToCloudinary(req.file.buffer, 'food_images');
+    req.body.imageCover = result.secure_url; // store Cloudinary URL in MongoDB
+  }
 
+  // 3️⃣ Create the food item in MongoDB
+  const newFood = await Food.create({
+    foodName: req.body.foodName,
+    price: req.body.price,
+    ingredients: req.body.ingredients,
+    instructions: req.body.instructions,
+    cookingTimeMinutes: req.body.cookingTimeMinutes,
+    menuId: req.body.menuId,
+    imageCover: req.body.imageCover // ✅ includes uploaded image
+  });
+
+  // 4️⃣ Send response
   res.status(201).json({
     status: 'success',
+    message: 'Food item created successfully!',
     data: newFood
   });
 });

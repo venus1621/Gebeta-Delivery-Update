@@ -19,15 +19,13 @@ import {
   getUser,
   updateUser,
   deleteUser,
+  activateUser,
   updateMe,
-  deleteMe,
-  addAddressToUser,
+ 
   getMyAddresses,
-  updateUserLocation,
-  getUserLocation,
   editAddress,
   deleteAddress,
-  setDefaultAddress,
+
   saveCurrentAddress
 } from '../controllers/userController.js';
 
@@ -65,13 +63,9 @@ router.post('/resetPasswordOTP', resetPasswordWithOTP);
 // 🔐 Protected Routes (Require Authentication)
 // =======================
 
+
+
 router.use(protect);
-
-// Update user location
-router.patch('/:id/updateLocation', updateUserLocation);
-
-// Get user location
-router.get('/:id/location', getUserLocation);
 
 // Update current user's password
 router.patch('/updateMyPassword', updatePassword);
@@ -80,15 +74,16 @@ router.patch('/updateMyPassword', updatePassword);
 router.patch('/updateMe', upload.single('profilePicture'), updateMe);
 
 
+
 // Soft delete current user's account
-router.delete('/deleteMe', deleteMe);
+
 
 // =======================
 // 🏠 Address Routes
 // =======================
 
 // Add an address
-router.post('/addAddress', addAddressToUser);
+
 
 // Add current geolocation as address
 router.post('/saveLocation', saveCurrentAddress);
@@ -102,8 +97,6 @@ router.patch('/address/:addressId', editAddress);
 // Delete an address
 router.delete('/address/:addressId', deleteAddress);
 
-// Set an address as default
-router.patch('/address/:addressId/setDefault', setDefaultAddress);
 
 // =======================
 // 🛡️ Admin-Only Routes
@@ -114,14 +107,14 @@ router.use(restrictTo('Admin'));
 // Admin: Get all users / create new user
 router
   .route('/')
-  .get(getAllUsers)
-  .post(createUser);
-
+  .get(getAllUsers).post( upload.single('profilePicture'), createUser);
+router.get('/getUser', getUser);
 // Admin: Get / update / delete specific user by ID
 router
   .route('/:id')
   .get(getUser)
-  .patch(updateUser)
-  .delete(deleteUser);
+  .patch( upload.single('profilePicture'),updateUser)
+  .delete(deleteUser)
+  .put(activateUser);
 
 export default router;

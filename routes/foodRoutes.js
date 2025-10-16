@@ -5,7 +5,7 @@ import {
   getFood,
   updateFood,
   deleteFood,
-  uploadFoodImageToCloudinary,
+
   getFoodsByMenuId
 } from '../controllers/foodController.js';
 
@@ -21,7 +21,7 @@ router
     protect,
     restrictTo('Admin', 'Manager'),
     upload.single('image'),
-    uploadFoodImageToCloudinary,
+   
     createFood
   );
 router.get('/by-menu/:menuId', getFoodsByMenuId);
@@ -32,7 +32,6 @@ router
     protect,
     restrictTo('Admin', 'Manager'),
     upload.single('image'),
-    uploadFoodImageToCloudinary,
     updateFood
   )
   .delete(protect, restrictTo('Admin', 'Manager'), deleteFood);

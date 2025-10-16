@@ -29,12 +29,6 @@ router.get(
   restrictTo('Manager', 'Admin'),
   restaurantController.getRestaurantsByManagerId
 );
-router.post(
-  '/assign-manager',
-  protect,
-  restrictTo('Admin'),
-  restaurantController.assignRestaurantManager
-);
 
 router.route('/:id')
   .get(restaurantController.getRestaurant)

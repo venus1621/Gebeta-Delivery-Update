@@ -1,160 +1,244 @@
 import mongoose from 'mongoose';
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import 'mongoose-geojson-schema';
 
-
-const userSchema = new mongoose.Schema(
+// =======================
+// Address Subschema
+// =======================
+const addressSchema = new mongoose.Schema(
   {
-    firstName: {
-      type: String,
-      required: [true, 'Please tell us your first name'],
-      trim: true,
-      default:'User'
-    },
-    lastName: {
-      type: String,
-      trim: true,
-    },
-    phone: {
-  type: String,
-  required: [true, 'Please provide your phone number'],
-  unique: true,
-  trim: true,
-  validate: {
-    validator: function (v) {
-      // Allow 9XXXXXXXX or +2519XXXXXXXX
-      return /^(\+251(7|9)\d{8}|9\d{8})$/.test(v);
-    },
-    message: props => `${props.value} is not a valid Ethiopian phone number`
-  }
-},
-    email: {
-      type: String,
-      unique: true,
-      sparse: true,
-      lowercase: true,
-      trim: true,
-      validate: {
-        validator: validator.isEmail,
-        message: 'Please provide a valid email',
-      },
-    },
-    profilePicture: {
-      type: String,
-      default:"https://res.cloudinary.com/drinuph9d/image/upload/v1752830842/800px-User_icon_2.svg_vi5e9d.png"
-    }
-    ,
-
-    password: {
-      type: String,
-      required: [true, 'Please provide a password'],
-      minlength: 8,
-      select: false,
-     
-    },
-    passwordConfirm: {
-      type: String,
-      required: [true, 'Please confirm your password'],
-      validate: {
-        validator: function (val) {
-          return val === this.password;
-        },
-        message: 'Passwords do not match!',
-      },
-     
-    },
-addresses: [
-  {
-    name: { type: String, default: 'Unnamed Address' },
+    name: { type: String, trim: true },
     label: {
       type: String,
       enum: ['Home', 'Work', 'Other'],
       default: 'Home'
     },
-    additionalInfo: String,
-    isDefault: {
-      type: Boolean,
-      default: false
-    },
-    coordinates: {
-      lat: { type: Number, required: true },
-      lng: { type: Number, required: true }
+    additionalInfo: { type: String, trim: true },
+    location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        required: true
+      },
+      coordinates: {
+        type: [Number],
+        required: true,
+        validate: {
+          validator: function (v) {
+            return v.length === 2 &&
+                   v[0] >= -180 && v[0] <= 180 &&
+                   v[1] >= -90 && v[1] <= 90;
+          },
+          message: 'Coordinates must be [longitude, latitude] within valid ranges'
+        }
+      }
     }
-  }
-]
+  },
+  { _id: true } // Each address gets its own ObjectId
+);
 
+// Enable geospatial queries
+addressSchema.index({ location: '2dsphere' });
 
-,
+// =======================
+// User Schema
+// =======================
+const userSchema = new mongoose.Schema(
+  {
+    firstName: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: v => validator.isAlpha(v, 'en-US'),
+        message: 'First name must contain only letters'
+      },
+      set: v => validator.escape(v)
+    },
+
+    lastName: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: v => !v || validator.isAlpha(v, 'en-US'),
+        message: 'Last name must contain only letters'
+      },
+      set: v => validator.escape(v)
+    },
+
+    phone: {
+      type: String,
+      unique: true,
+      required: [true, 'Phone number is required'],
+      validate: {
+        validator: v => {
+          const num = parsePhoneNumberFromString(v, 'ET');
+          return num?.isValid();
+        },
+        message: props => `${props.value} is not a valid phone number`
+      },
+      set: v => {
+        const num = parsePhoneNumberFromString(v, 'ET');
+        return num ? num.format('E.164') : v;
+      }
+    },
+
+    profilePicture: {
+      type: String,
+      validate: [validator.isURL, 'Profile picture must be a valid URL']
+    },
+
+    password: {
+      type: String,
+      required: [true, 'Please provide a PIN'],
+      validate: {
+        validator: v => /^\d{4}$/.test(v),
+        message: 'PIN must be exactly 4 digits'
+      },
+      select: false
+    },
+
+    passwordConfirm: {
+      type: String,
+      required: [true, 'Please confirm your PIN'],
+      validate: {
+        validator: function (val) {
+          return val === this.password;
+        },
+        message: 'PINs do not match'
+      }
+    },
+
+    addresses: {
+      type: [addressSchema],
+      default: [],
+      validate: {
+        validator: function (arr) {
+          return arr.length <= 3;
+        },
+        message: 'A user can only have up to 3 addresses'
+      }
+    },
+
     role: {
       type: String,
       enum: ['Customer', 'Manager', 'Delivery_Person', 'Admin'],
       default: 'Customer',
-    },
-    deliveryMethod: {
-      type: String,
-      enum: ['Car', 'Motor', 'Bicycle'],
-    },
-    location: {
-      latitude: { type: Number },
-      longitude: { type: Number },
-      updatedAt: { type: Date },
-    },
-    isPhoneVerified: {
-      type: Boolean,
-      default: false,
+      required: true
     },
 
-    signupOTP: String,
-    signupOTPExpires: Date,
-    passwordResetOTP: String,
-    resetPasswordOTPExpires: Date,
+    firstLogin: {
+      type: Boolean,
+      default: function () {
+        return this.role === 'Manager';
+      },
+      validate: {
+        validator: function (v) {
+          return this.role === 'Manager' ? true : v === false;
+        },
+        message: 'firstLogin can only be true for Managers.'
+      }
+    },
+
+    fcnNumber: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function (v) {
+          if (this.role === 'Manager' || this.role === 'Delivery_Person') {
+            return !!v ;
+          }
+          return !v;
+        },
+        message:
+          'FCN Number is required and must be for Managers and Delivery Persons only.'
+      }
+    },
+
+    deliveryMethod: {
+      type: String,
+      enum: {
+        values: ['Car', 'Motor', 'Bicycle'],
+        message: '{VALUE} is not a valid delivery method'
+      },
+      validate: {
+        validator: function (v) {
+          if (this.role === 'Delivery_Person') return !!v;
+          return !v;
+        },
+        message: function () {
+          return this.role === 'Delivery_Person'
+            ? 'Delivery method is required for Delivery_Person'
+            : 'Only Delivery_Person can have a delivery method';
+        }
+      }
+    },
+
+    isPhoneVerified: {
+      type: Boolean,
+      default: false
+    },
 
     passwordChangedAt: Date,
 
     active: {
       type: Boolean,
       default: true,
-      select: false,
-    },
+      select: false
+    }
   },
-  {
-    timestamps: true,
-  },
-  {
-    firstLogin:Boolean,
-    default: false
-  }
+  { timestamps: true }
 );
 
-// Hash password before saving
+// =======================
+// Indexes
+// =======================
+userSchema.index({ phone: 1 });
+userSchema.index({ role: 1 });
+userSchema.index({ active: 1 });
+userSchema.index({ phone: 1, role: 1 });
+
+// =======================
+// Hooks
+// =======================
+
+// Hash PIN before saving
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-
   this.password = await bcrypt.hash(this.password, 12);
   this.passwordConfirm = undefined;
   next();
 });
 
-// Set passwordChangedAt timestamp
+// Track PIN change timestamp
 userSchema.pre('save', function (next) {
   if (!this.isModified('password') || this.isNew) return next();
-
   this.passwordChangedAt = Date.now() - 1000;
   next();
 });
 
-// Filter only active users
+// Query only active users
 userSchema.pre(/^find/, function (next) {
+  // If the query already specifies an 'active' field, skip automatic filtering
+  if (this.getQuery().hasOwnProperty('active')) {
+    return next();
+  }
+
+  // Otherwise, return only active users by default
   this.find({ active: { $ne: false } });
   next();
-});
+})
+// =======================
+// Instance Methods
+// =======================
 
-// Compare password method
-userSchema.methods.correctPassword = async function (candidatePassword, hashedPassword) {
-  return await bcrypt.compare(candidatePassword, hashedPassword);
+// Compare PINs
+userSchema.methods.correctPassword = async function (candidatePIN, hashedPIN) {
+  return bcrypt.compare(candidatePIN, hashedPIN);
 };
 
-// Check if password was changed after token issued
+// Check if PIN changed after JWT issue
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
   if (this.passwordChangedAt) {
     const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
@@ -163,26 +247,10 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
   return false;
 };
 
-// Generate signup OTP
-userSchema.methods.createSignupOTP = function () {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  this.signupOTP = bcrypt.hashSync(otp, 12);
-  this.signupOTPExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-  return otp;
-};
 
-// Generate reset password OTP
-userSchema.methods.createPasswordResetOTP = function () {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  this.passwordResetOTP = bcrypt.hashSync(otp, 12);
-  this.resetPasswordOTPExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-  return otp;
-};
 
-// Match OTP
-userSchema.methods.verifyOTP = function (plainOTP, hashedOTP) {
-  return bcrypt.compareSync(plainOTP, hashedOTP);
-};
-
-const User = mongoose.model('User', userSchema);
+// =======================
+// Export Model
+// =======================
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 export default User;

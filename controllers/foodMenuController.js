@@ -49,8 +49,6 @@ export const getAllMenus = catchAsync(async (req, res, next) => {
   });
 });
 
-// GET single menu
-// GET single menu
 export const getMenu = catchAsync(async (req, res, next) => {
 
   const menu = await FoodMenu.findById(req.params.id);

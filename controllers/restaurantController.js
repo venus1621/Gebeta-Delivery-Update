@@ -1,20 +1,20 @@
 import Restaurant from '../models/restaurantModel.js';
+import Rating from '../models/Rating.js'; // Import Rating to ensure model registration
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
-import APIFeatures from '../utils/apiFeatures.js';
 import User from '../models/userModel.js';
-import axios from 'axios';
 import NodeGeocoder from 'node-geocoder';
 import cloudinary from '../utils/cloudinary.js';
 import streamifier from 'streamifier';
 import filterObj from '../utils/filterObj.js';
 import mongoose from 'mongoose';
+import { getDistance } from 'geolib';
 
 // Alias for top 5 rated restaurants
 export const aliasTopRestaurants = (req, res, next) => {
   req.query.limit = '5';
-  req.query.sort = '-ratingAverage,deliveryRadiusMeters';
-  req.query.fields = 'name,location,ratingAverage,cuisineTypes,deliveryRadiusMeters';
+  req.query.sort = '-ratingAverage';
+  req.query.fields = 'name,location,ratingAverage,cuisineTypes,isDeliveryAvailable';
   next();
 };
 
@@ -23,50 +23,45 @@ const geocoder = NodeGeocoder({
 });
 
 export const getRestaurantsWithDistanceFromCoords = catchAsync(async (req, res, next) => {
-  const { lng, lat } = req.query;
+  const { lng, lat, radius } = req.query;
 
-  if (!lng || !lat) {
-    return next(new AppError('Please provide longitude (lng) and latitude (lat) in query.', 400));
+  // Validate input
+  if (!lng || !lat || !radius) {
+    return next(new AppError('Please provide longitude (lng), latitude (lat), and radius (in kilometers) in query.', 400));
   }
 
   const userCoords = [parseFloat(lng), parseFloat(lat)];
+  const radiusInMeters = parseFloat(radius) * 1000; // Convert kilometers to meters for MongoDB
 
-  // Fetch all active restaurants
-  const restaurants = await Restaurant.find({ active: true });
-
-  // Map over restaurants and get distance & duration from OSRM
-  const results = await Promise.all(
-    restaurants.map(async (restaurant) => {
-      const restCoords = restaurant.location.coordinates; // [lng, lat]
-
-      try {
-        // OSRM route API to get driving distance and duration
-        const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${userCoords[0]},${userCoords[1]};${restCoords[0]},${restCoords[1]}?overview=false`;
-        const response = await axios.get(osrmUrl);
-
-        const route = response.data.routes?.[0];
-        const distance = route?.distance || null; // meters
-        const duration = route?.duration || null; // seconds
-
-        return {
-          ...restaurant.toObject(),
-          distanceMeters: distance ? Math.round(distance) : null,
-          durationMinutes: duration ? Math.round(duration / 60) : null
-        };
-      } catch (error) {
-        console.error('OSRM Error:', error.message);
-        return {
-          ...restaurant.toObject(),
-          distanceMeters: null,
-          durationMinutes: null
-        };
+  // Find restaurants within the specified radius using MongoDB geospatial query
+  const restaurants = await Restaurant.find({
+    active: true,
+    location: {
+      $geoWithin: {
+        $centerSphere: [userCoords, radiusInMeters / 6378137] // Earth's radius in meters
       }
-    })
-  );
+    }
+  });
+
+  // Map over restaurants and calculate distance using geolib
+  const results = restaurants.map((restaurant) => {
+    const restCoords = restaurant.location.coordinates; // [lng, lat]
+
+    // Calculate distance using geolib
+    const distance = getDistance(
+      { latitude: lat, longitude: lng },
+      { latitude: restCoords[1], longitude: restCoords[0] }
+    ); // Returns distance in meters
+
+    return {
+      ...restaurant.toObject(),
+      distanceMeters: Math.round(distance),
+      durationMinutes: null // Duration not calculated without OSRM
+    };
+  });
 
   // Sort by nearest distance first
-  const sorted = results.filter(r => r.distanceMeters !== null)
-                        .sort((a, b) => a.distanceMeters - b.distanceMeters);
+  const sorted = results.sort((a, b) => a.distanceMeters - b.distanceMeters);
 
   res.status(200).json({
     status: 'success',
@@ -75,25 +70,54 @@ export const getRestaurantsWithDistanceFromCoords = catchAsync(async (req, res, 
   });
 });
 
+
 // Get all restaurants with filtering, sorting, pagination & search
 export const getAllRestaurants = catchAsync(async (req, res, next) => {
-  // Create an instance of APIFeatures with the base query and request query
-  const features = new APIFeatures(Restaurant.find(), req.query)
-    .filter()
-    .sort()
-    .limitFields()
-    .paginate();
+  // Build the query
+  const query = Restaurant.find().populate({
+    path: 'managerId',
+    select: 'firstName lastName phone',
+  });
 
-  // Execute the query and populate the manager data
-  const restaurants = await features.query.populate('managerId');
+  // Execute the query
+  const restaurants = await query;
+
+  // If no restaurants found
+  if (!restaurants || restaurants.length === 0) {
+    return next(new AppError('No restaurants found', 404));
+  }
+
+  // Format response for frontend
+  const formattedRestaurants = restaurants.map((restaurant) => ({
+    id: restaurant._id,
+    name: restaurant.name,
+    location: {
+      address: restaurant.location?.address || '',
+      coordinates: restaurant.location?.coordinates || [],
+    },
+    cuisineTypes: restaurant.cuisineTypes,
+    imageCover: restaurant.imageCover,
+    description: restaurant.description,
+    shortDescription: restaurant.shortDescription,
+    ratingAverage: restaurant.ratingAverage,
+    ratingQuantity: restaurant.ratingQuantity,
+    isDeliveryAvailable: restaurant.isDeliveryAvailable,
+    isOpenNow: restaurant.isOpenNow,
+    manager: restaurant.managerId
+      ? {
+          id: restaurant.managerId._id,
+          name: `${restaurant.managerId.firstName} ${restaurant.managerId.lastName}`,
+          phone: restaurant.managerId.phone,
+        }
+      : null,
+    ratings: restaurant.rating,
+  }));
 
   // Send response
   res.status(200).json({
     status: 'success',
-    results: restaurants.length,
-    data: {
-      restaurants,
-    },
+    results: formattedRestaurants.length,
+    data: formattedRestaurants,
   });
 });
 
@@ -205,59 +229,85 @@ export const getRestaurantWithMenu = catchAsync(async (req, res, next) => {
 });
 
 export const createRestaurant = catchAsync(async (req, res, next) => {
-  const {
-    name,
-    license,
-    manager,
-    cuisineTypes = [],
-    deliveryRadiusMeters,
-    openHours,
-    isDeliveryAvailable = false,
-    isOpenNow = false,
-    description,
-  } = req.body;
+  const { name, license, managerPhone, isDeliveryAvailable } = req.body;
 
-  // 1. Validate Manager
-  if (!manager) {
-    return next(new AppError('Manager phone number is required to create a restaurant.', 400));
+  // 1. Validate required fields
+  if (!name || !license || !managerPhone) {
+    return next(new AppError('Name, license, and managerId are required.', 400));
   }
 
-  const managerUser = await User.findOne({ phone: manager });
-
-  if (!managerUser || !['Manager', 'Admin'].includes(managerUser.role)) {
-    return next(new AppError('Only users with role "Manager" or "Admin" can manage a restaurant.', 403));
+  // 2. Validate manager
+const managerUser = await User.findOne({ phone: managerPhone });
+ 
+  if (!managerUser || !['Manager'].includes(managerUser.role)) {
+    return next(new AppError('managerId must correspond to a user with Manager  role.', 403));
   }
 
-  // 2. Create Restaurant
+  // 4. Create restaurant
   const newRestaurant = await Restaurant.create({
     name,
     license,
     managerId: managerUser._id,
-    cuisineTypes,
-    deliveryRadiusMeters,
-    openHours,
     isDeliveryAvailable,
-    isOpenNow,
-    description,
+  });
+  // 5. Populate manager for response
+  await newRestaurant.populate({
+    path: 'managerId',
+    select: 'firstName lastName'
   });
 
-  // 3. Respond
+  // 6. Transform response for frontend
+  const formattedRestaurant = {
+    id: newRestaurant._id,
+    name: newRestaurant.name,
+    location: newRestaurant.location
+      ? {
+          address: newRestaurant.location.address || null,
+          coordinates: newRestaurant.location.coordinates || [0, 0]
+        }
+      : null,
+    cuisineTypes: newRestaurant.cuisineTypes,
+    imageCover: newRestaurant.imageCover,
+    description: newRestaurant.description,
+    shortDescription: newRestaurant.shortDescription,
+    ratingAverage: newRestaurant.ratingAverage,
+    ratingQuantity: newRestaurant.ratingQuantity,
+    isDeliveryAvailable: newRestaurant.isDeliveryAvailable,
+    isOpenNow: newRestaurant.isOpenNow,
+    manager: newRestaurant.managerId,
+    reviews: newRestaurant.reviews || []
+  };
+
+  // 7. Send response
   res.status(201).json({
     status: 'success',
     data: {
-      restaurant: newRestaurant
+      restaurant: formattedRestaurant
     }
   });
 });
 
 // Update restaurant by ID
 export const updateRestaurant = catchAsync(async (req, res, next) => {
-  // Prevent password updates via this route
-  if (req.body.password || req.body.passwordConfirm) {
-    return next(new AppError('This route is not for password updates.', 400));
+  // 1. Validate restaurant ID
+  if (!req.params.id || !mongoose.isValidObjectId(req.params.id)) {
+    return next(new AppError('Invalid restaurant ID.', 400));
   }
 
+  // 2. Handle image upload if provided
   if (req.file) {
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return next(new AppError('Only JPEG, PNG, or WebP images are allowed.', 400));
+    }
+    
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    if (req.file.size > maxSize) {
+      return next(new AppError('Image size must not exceed 5MB.', 400));
+    }
+
     const uploadFromBuffer = (fileBuffer, publicId) => {
       return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -276,52 +326,84 @@ export const updateRestaurant = catchAsync(async (req, res, next) => {
       });
     };
 
-    const publicId = req.params.id.toString(); // restaurant ID as image name
-    const result = await uploadFromBuffer(req.file.buffer, publicId);
-    req.body.imageCover = result.secure_url;
+    try {
+      const publicId = req.params.id.toString();
+      const result = await uploadFromBuffer(req.file.buffer, publicId);
+      req.body.imageCover = result.secure_url;
+    } catch (error) {
+      return next(new AppError('Failed to upload image to Cloudinary.', 500));
+    }
   }
 
-  // Filter allowed fields for update
-  const filteredBody = filterObj(
-    req.body,
-    'name',
-    'location',
-    'cuisineTypes',
-    'description',
-    'imageCover',
-    'deliveryRadiusMeters',
-    'openHours',
-    'isDeliveryAvailable',
-    'isOpenNow',
-    'address',
-    'deliveryradiusMeters'
-  );
+  // 3. Filter allowed fields for update
+  const filteredBody = filterObj(req.body, 'cuisineTypes', 'description', 'imageCover', 'isDeliveryAvailable');
 
+  // 4. Update restaurant
   const restaurant = await Restaurant.findByIdAndUpdate(req.params.id, filteredBody, {
     new: true,
     runValidators: true
   });
 
   if (!restaurant) {
-    return next(new AppError('No restaurant found with that ID', 404));
+    return next(new AppError('No restaurant found with that ID.', 404));
   }
 
+  // 5. Populate manager with phone for response
+  await restaurant.populate({
+    path: 'managerId',
+    select: 'firstName lastName phone'
+  });
+
+  // 6. Transform response for frontend
+  const formattedRestaurant = {
+    id: restaurant._id,
+    name: restaurant.name,
+    location: restaurant.location
+      ? {
+          address: restaurant.location.address || null,
+          coordinates: restaurant.location.coordinates || [0, 0]
+        }
+      : null,
+    cuisineTypes: restaurant.cuisineTypes,
+    imageCover: restaurant.imageCover,
+    description: restaurant.description,
+    shortDescription: restaurant.shortDescription,
+    ratingAverage: restaurant.ratingAverage,
+    ratingQuantity: restaurant.ratingQuantity,
+    isDeliveryAvailable: restaurant.isDeliveryAvailable,
+    isOpenNow: restaurant.isOpenNow,
+    manager: restaurant.managerId,
+    reviews: restaurant.reviews || []
+  };
+
+  // 7. Send response
   res.status(200).json({
     status: 'success',
     data: {
-      restaurant
+      restaurant: formattedRestaurant
     }
   });
 });
 
-// Delete restaurant by ID
 export const deleteRestaurant = catchAsync(async (req, res, next) => {
-  const restaurant = await Restaurant.findByIdAndDelete(req.params.id);
-
-  if (!restaurant) {
-    return next(new AppError('No restaurant found with that ID', 404));
+  // 1. Validate restaurant ID
+  if (!req.params.id || !mongoose.isValidObjectId(req.params.id)) {
+    return next(new AppError('Invalid restaurant ID.', 400));
   }
 
+  // 2. Soft-delete by setting active: false
+  const restaurant = await Restaurant.findByIdAndUpdate(
+    req.params.id,
+    { active: false },
+    { new: true, runValidators: true }
+  );
+
+  // 3. Check if restaurant exists
+  if (!restaurant) {
+    return next(new AppError('No restaurant found with that ID.', 404));
+  }
+
+  // 4. Send response
   res.status(204).json({
     status: 'success',
     data: null
@@ -329,113 +411,162 @@ export const deleteRestaurant = catchAsync(async (req, res, next) => {
 });
 
 export const getRestaurantsByManagerId = catchAsync(async (req, res, next) => {
+  // 1. Validate manager ID
   const { managerId } = req.params;
-
-  if (!managerId) {
-    return next(new AppError('Manager ID is required.', 400));
+  if (!managerId || !mongoose.isValidObjectId(managerId)) {
+    return next(new AppError('Invalid manager ID.', 400));
   }
 
-  const restaurants = await Restaurant.find({ managerId });
+  // 2. Validate manager role
+  const managerUser = await User.findById(managerId);
+  if (!managerUser || !['Manager', 'Admin'].includes(managerUser.role)) {
+    return next(new AppError('Manager ID must correspond to a user with Manager or Admin role.', 403));
+  }
 
+  // 3. Build query
+  let query = Restaurant.find({ managerId });
+
+  // 4. Conditionally populate reviews
+  if (req.query.includeReviews === 'true') {
+    query = query.populate({
+      path: 'reviews',
+      select: 'rating review user createdAt',
+      populate: { path: 'user', select: 'firstName lastName' }
+    });
+  }
+
+  // 5. Populate manager data
+  query = query.populate({
+    path: 'managerId',
+    select: 'firstName lastName phone'
+  });
+
+  // 6. Execute query
+  const restaurants = await query;
+
+  // 7. Check if restaurants exist
   if (!restaurants.length) {
     return next(new AppError('No restaurants found for the given manager ID.', 404));
   }
 
+  // 8. Transform response for frontend
+  const formattedRestaurants = restaurants.map(restaurant => ({
+    id: restaurant._id,
+    name: restaurant.name,
+    location: restaurant.location
+      ? {
+          address: restaurant.location.address || null,
+          coordinates: restaurant.location.coordinates || [0, 0]
+        }
+      : null,
+    cuisineTypes: restaurant.cuisineTypes,
+    imageCover: restaurant.imageCover,
+    description: restaurant.description,
+    shortDescription: restaurant.shortDescription,
+    ratingAverage: restaurant.ratingAverage,
+    ratingQuantity: restaurant.ratingQuantity,
+    isDeliveryAvailable: restaurant.isDeliveryAvailable,
+    isOpenNow: restaurant.isOpenNow,
+    manager: restaurant.managerId,
+    ...(req.query.includeReviews === 'true' && { reviews: restaurant.reviews })
+  }));
+
+  // 9. Send response
   res.status(200).json({
     status: 'success',
-    results: restaurants.length,
+    results: formattedRestaurants.length,
     data: {
-      restaurants
+      restaurants: formattedRestaurants
     }
   });
 });
 
-// Get restaurants nearby within a radius (meters)
-export const getNearbyRestaurants = catchAsync(async (req, res, next) => {
-  const { lat, lng, distance } = req.query;
+// // Get restaurants nearby within a radius (meters)
+// export const getNearbyRestaurants = catchAsync(async (req, res, next) => {
+//   const { lat, lng, distance } = req.query;
 
-  if (!lat || !lng) {
-    return next(new AppError('Please provide latitude and longitude in query', 400));
-  }
+//   if (!lat || !lng) {
+//     return next(new AppError('Please provide latitude and longitude in query', 400));
+//   }
 
-  const maxDistance = distance ? parseInt(distance) : 3000; // default 3km radius
+//   const maxDistance = distance ? parseInt(distance) : 3000; // default 3km radius
 
-  const restaurants = await Restaurant.find({
-    location: {
-      $near: {
-        $geometry: {
-          type: 'Point',
-          coordinates: [parseFloat(lng), parseFloat(lat)]
-        },
-        $maxDistance: maxDistance
-      }
-    }
-  });
+//   const restaurants = await Restaurant.find({
+//     location: {
+//       $near: {
+//         $geometry: {
+//           type: 'Point',
+//           coordinates: [parseFloat(lng), parseFloat(lat)]
+//         },
+//         $maxDistance: maxDistance
+//       }
+//     }
+//   });
 
-  res.status(200).json({
-    status: 'success',
-    results: restaurants.length,
-    data: { restaurants }
-  });
-});
+//   res.status(200).json({
+//     status: 'success',
+//     results: restaurants.length,
+//     data: { restaurants }
+//   });
+// });
 
-// Aggregate stats by cuisine type
-export const getRestaurantStats = catchAsync(async (req, res, next) => {
-  const stats = await Restaurant.aggregate([
-    { $unwind: '$cuisineTypes' },
-    {
-      $group: {
-        _id: '$cuisineTypes',
-        numRestaurants: { $sum: 1 },
-        avgRating: { $avg: '$ratingAverage' },
-        minDeliveryRadius: { $min: '$deliveryRadiusMeters' },
-        maxDeliveryRadius: { $max: '$deliveryRadiusMeters' }
-      }
-    },
-    { $sort: { numRestaurants: -1 } }
-  ]);
+// // Aggregate stats by cuisine type
+// export const getRestaurantStats = catchAsync(async (req, res, next) => {
+//   const stats = await Restaurant.aggregate([
+//     { $unwind: '$cuisineTypes' },
+//     {
+//       $group: {
+//         _id: '$cuisineTypes',
+//         numRestaurants: { $sum: 1 },
+//         avgRating: { $avg: '$ratingAverage' },
+//         minDeliveryRadius: { $min: '$deliveryRadiusMeters' },
+//         maxDeliveryRadius: { $max: '$deliveryRadiusMeters' }
+//       }
+//     },
+//     { $sort: { numRestaurants: -1 } }
+//   ]);
 
-  res.status(200).json({
-    status: 'success',
-    data: { stats }
-  });
-});
+//   res.status(200).json({
+//     status: 'success',
+//     data: { stats }
+//   });
+// });
 
-export const assignRestaurantManager = catchAsync(async (req, res, next) => {
-  const { phone, restaurantId } = req.body;
+// export const assignRestaurantManager = catchAsync(async (req, res, next) => {
+//   const { phone, restaurantId } = req.body;
 
-  if (!phone || !restaurantId) {
-    return next(new AppError('Phone number and restaurant ID are required', 400));
-  }
+//   if (!phone || !restaurantId) {
+//     return next(new AppError('Phone number and restaurant ID are required', 400));
+//   }
 
-  // 1. Find user by phone number
-  const user = await User.findOne({ phone });
+//   // 1. Find user by phone number
+//   const user = await User.findOne({ phone });
 
-  if (!user) {
-    return next(new AppError('No user found with that phone number', 404));
-  }
+//   if (!user) {
+//     return next(new AppError('No user found with that phone number', 404));
+//   }
 
-  // 2. Ensure user has Manager role
-  if (user.role !== 'Manager') {
-    return next(new AppError('User is not a Manager', 400));
-  }
+//   // 2. Ensure user has Manager role
+//   if (user.role !== 'Manager') {
+//     return next(new AppError('User is not a Manager', 400));
+//   }
 
-  // 3. Update restaurant with new manager
-  const restaurant = await Restaurant.findByIdAndUpdate(
-    restaurantId,
-    { managerId: user._id },
-    { new: true, runValidators: true }
-  );
+//   // 3. Update restaurant with new manager
+//   const restaurant = await Restaurant.findByIdAndUpdate(
+//     restaurantId,
+//     { managerId: user._id },
+//     { new: true, runValidators: true }
+//   );
 
-  if (!restaurant) {
-    return next(new AppError('Restaurant not found', 404));
-  }
+//   if (!restaurant) {
+//     return next(new AppError('Restaurant not found', 404));
+//   }
 
-  res.status(200).json({
-    status: 'success',
-    message: `Manager assigned to ${restaurant.name}`,
-    data: {
-      restaurant
-    }
-  });
-});
+//   res.status(200).json({
+//     status: 'success',
+//     message: `Manager assigned to ${restaurant.name}`,
+//     data: {
+//       restaurant
+//     }
+//   });
+// });

@@ -6,7 +6,7 @@ import User from '../models/userModel.js';
 import axios from 'axios';
 import { getIO } from '../utils/socket.js';
 import { computeDeliveryFee } from '../utils/computeDeliveryFee.js';
-import {notifyRestaurantManager,notifyDeliveryGroup} from '../server.js';
+import {notifyRestaurantManager,notifyDeliveryGroup} from '../socket.js';
 
 // Generate a unique order_id (e.g., ORD-XXXXXX)
 const generateOrderId = async () => {
