@@ -2,9 +2,6 @@ import express from 'express';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import mongoSanitize from 'express-mongo-sanitize';
-import xss from 'xss-clean';
-
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import cors from 'cors';
@@ -102,7 +99,7 @@ app.get('/', (req, res) => {
 // ⚠️ Handle undefined routes
 app.use((req, res, next) => { next(new AppError("Can't find ${req.originalUrl} on this server!", 404)); });
 
-// 🧨 Global error handler
-app.use(globalErrorHandler);
+// // 🧨 Global error handler
+// app.use(globalErrorHandler);
 
 export default app;

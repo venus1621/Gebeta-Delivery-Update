@@ -146,7 +146,6 @@ const restaurantSchema = new mongoose.Schema(
       default: 0,
       min: [0, 'Rating quantity cannot be negative']
     },
-
     // Rating Reference
     rating: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Rating' }]

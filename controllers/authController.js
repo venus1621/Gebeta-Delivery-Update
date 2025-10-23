@@ -1,21 +1,150 @@
 import { parsePhoneNumber } from 'libphonenumber-js';
 import { promisify } from 'util';
 import jwt from 'jsonwebtoken';
-import twilio from 'twilio';
+import axios from 'axios';
 import { body, validationResult } from 'express-validator';
 import User from '../models/userModel.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
 import Restaurant from '../models/restaurantModel.js';
 
-// 📞 Normalize Ethiopian phone number using libphonenumber-js
+// =======================
+// AfroMessage OTP Service
+// =======================
+class AfroMessageOTP {
+  constructor() {
+    this.apiToken = process.env.AFROMESSAGE_API_TOKEN;
+    this.senderName = process.env.AFROMESSAGE_SENDER_NAME;
+    this.identifierId = process.env.AFROMESSAGE_IDENTIFIER_ID;
+    this.baseUrl = 'https://api.afromessage.com/api';
+    
+    if (!this.apiToken) {
+      throw new Error('AFROMESSAGE_API_TOKEN is required');
+    }
+  }
+
+  /**
+   * Send OTP code to a phone number
+   */
+  async sendOTP(phone, options = {}) {
+    const {
+      codeLength = 6,
+      codeType = 0, // 0=numeric, 1=alphabetic, 2=alphanumeric
+      ttlSeconds = 300, // 5 minutes
+      messagePrefix = 'Your verification code is',
+      messagePostfix = '. Do not share this code.',
+      spacesBeforeCode = 1,
+      spacesAfterCode = 0
+    } = options;
+
+    try {
+      const params = new URLSearchParams({
+        to: phone,
+        len: codeLength,
+        t: codeType,
+        ttl: ttlSeconds,
+        pr: messagePrefix,
+        ps: messagePostfix,
+        sb: spacesBeforeCode,
+        sa: spacesAfterCode
+      });
+
+      if (this.identifierId) params.append('from', this.identifierId);
+      if (this.senderName) params.append('sender', this.senderName);
+
+      const response = await axios.get(`${this.baseUrl}/challenge`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json'
+        },
+        params,
+        timeout: 30000
+      });
+
+      if (response.data.acknowledge === 'success') {
+        return {
+          success: true,
+          verificationId: response.data.response.verificationId,
+          messageId: response.data.response.message_id,
+          code: response.data.response.code, // For logging/debugging only
+          message: response.data.response.message,
+          to: response.data.response.to
+        };
+      }
+
+      return {
+        success: false,
+        error: response.data.response || 'Failed to send OTP'
+      };
+    } catch (error) {
+      console.error('AfroMessage sendOTP error:', error.response?.data || error.message);
+      throw new AppError('Failed to send OTP. Please try again.', 500);
+    }
+  }
+
+  /**
+   * Verify OTP code
+   */
+  async verifyOTP(code, phone = null, verificationId = null) {
+    if (!phone && !verificationId) {
+      throw new AppError('Either phone or verificationId is required', 400);
+    }
+
+    try {
+      const params = new URLSearchParams({ code });
+      if (verificationId) params.append('vc', verificationId);
+      if (phone) params.append('to', phone);
+
+      const response = await axios.get(`${this.baseUrl}/verify`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json'
+        },
+        params,
+        timeout: 30000
+      });
+
+      if (response.data.acknowledge === 'success') {
+        return {
+          success: true,
+          verified: true,
+          phone: response.data.response.phone,
+          verificationId: response.data.response.verificationId
+        };
+      }
+
+      return {
+        success: false,
+        verified: false,
+        error: response.data.response || 'Verification failed'
+      };
+    } catch (error) {
+      console.error('AfroMessage verifyOTP error:', error.response?.data || error.message);
+      // If verification fails, it's likely invalid/expired code
+      return {
+        success: false,
+        verified: false,
+        error: 'Invalid or expired OTP code'
+      };
+    }
+  }
+}
+
+// Initialize AfroMessage service
+const afroMessageService = new AfroMessageOTP();
+
+// =======================
+// Helper Functions
+// =======================
+
+// 📞 Normalize Ethiopian phone number
 export const normalizePhone = (phone) => {
   try {
-    const phoneNumber = parsePhoneNumber(phone, 'ET'); // 'ET' for Ethiopia
+    const phoneNumber = parsePhoneNumber(phone, 'ET');
     if (!phoneNumber.isValid()) {
       throw new AppError('Invalid phone number format', 400);
     }
-    return phoneNumber.formatInternational(); // Returns e.g., "+251 91 234 5678"
+    return phoneNumber.format('E.164'); // Returns e.g., "+251912345678"
   } catch (err) {
     throw new AppError('Invalid phone number format', 400);
   }
@@ -47,19 +176,38 @@ const createSendToken = (user, statusCode, res) => {
   res.status(statusCode).json({
     status: 'success',
     message: 'Logged in successfully',
-    token:token,
+    token: token,
     data: { user },
   });
 };
 
 // 🛠️ Reusable OTP sender
-const sendTwilioOTP = catchAsync(async (phone, channel = 'sms') => {
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.verify.v2
-    .services(process.env.TWILIO_VERIFY_SERVICE_ID)
-    .verifications.create({ to: phone, channel });
-  return { status: 'success', message: `OTP sent to ${phone}` };
-});
+const sendAfroMessageOTP = async (phone) => {
+  const result = await afroMessageService.sendOTP(phone, {
+    codeLength: 6,
+    codeType: 0,
+    ttlSeconds: 300,
+    messagePrefix: 'Your verification code is',
+    messagePostfix: '. Valid for 5 minutes.',
+    spacesBeforeCode: 1
+  });
+
+  if (!result.success) {
+    throw new AppError(result.error || 'Failed to send OTP', 500);
+  }
+
+  return {
+    status: 'success',
+    data: {
+      message: `OTP sent to ${phone}`,
+      verificationId: result.verificationId
+    }
+  };
+};
+
+// =======================
+// Auth Controllers
+// =======================
 
 // 📤 1. Send OTP
 export const sendOTP = [
@@ -70,8 +218,12 @@ export const sendOTP = [
 
     const { phone } = req.body;
     const normalizedPhone = normalizePhone(phone);
-    const response = await sendTwilioOTP(normalizedPhone);
-    res.status(200).json(response);
+    const response = await sendAfroMessageOTP(normalizedPhone);
+    
+    res.status(200).json({
+      ...response,
+      phone: normalizedPhone
+    });
   }),
 ];
 
@@ -79,19 +231,23 @@ export const sendOTP = [
 export const verifyOTP = [
   body('phone').notEmpty().withMessage('Phone number is required'),
   body('code').notEmpty().withMessage('OTP code is required'),
+  body('verificationId').optional(),
   catchAsync(async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return next(new AppError(errors.array()[0].msg, 400));
 
-    const { phone, code } = req.body;
+    const { phone, code, verificationId } = req.body;
     const normalizedPhone = normalizePhone(phone);
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-    const result = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_ID)
-      .verificationChecks.create({ to: normalizedPhone, code });
+    const result = await afroMessageService.verifyOTP(
+      code,
+      normalizedPhone,
+      verificationId
+    );
 
-    if (result.status !== 'approved') return next(new AppError('Invalid or expired OTP', 400));
+    if (!result.success || !result.verified) {
+      return next(new AppError(result.error || 'Invalid or expired OTP', 400));
+    }
 
     const user = await User.findOne({ phone: normalizedPhone });
     if (!user) return next(new AppError('User not found', 404));
@@ -101,7 +257,10 @@ export const verifyOTP = [
       await user.save({ validateBeforeSave: false });
     }
 
-    res.status(200).json({ status: 'success', message: 'Phone verified!' });
+    res.status(200).json({ 
+      status: 'success', 
+      message: 'Phone verified!' 
+    });
   }),
 ];
 
@@ -114,53 +273,55 @@ export const signup = [
 
     const { phone } = req.body;
     const normalizedPhone = normalizePhone(phone);
-    const response = await sendTwilioOTP(normalizedPhone);
-    res.status(200).json({ ...response, status: 'pending', phone: normalizedPhone });
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({ phone: normalizedPhone });
+    if (existingUser && existingUser.isPhoneVerified) {
+      return next(new AppError('User already exists. Please login.', 400));
+    }
+
+    const response = await sendAfroMessageOTP(normalizedPhone);
+    console.log('OTP sent response:', response);
+    res.status(200).json({ 
+      status: 'pending', 
+      message: response.data.message,
+      phone: normalizedPhone,
+      verificationId: response.data.verificationId
+    });
   }),
 ];
 
-// ✅ 4. Verify Signup & Create User
+// ✅ 4. Verify Signup & Create User (OTP as initial password)
 export const verifySignupOTP = [
   body('phone').notEmpty().withMessage('Phone number is required'),
   body('code').notEmpty().withMessage('OTP code is required'),
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-    .isLength({ min: 4 })
-    .withMessage('Password must be at least 4 characters'),
-  body('passwordConfirm').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match'),
+  body('verificationId').optional(),
   catchAsync(async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return next(new AppError(errors.array()[0].msg, 400));
-    const { phone, code, password, passwordConfirm } = req.body;
+
+    const { phone, code, verificationId } = req.body;
     const normalizedPhone = normalizePhone(phone);
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-    const check = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_ID)
-      .verificationChecks.create({ to: normalizedPhone, code });
+    const result = await afroMessageService.verifyOTP(
+      code,
+      normalizedPhone,
+      verificationId
+    );
 
-    if (check.status !== 'approved') return next(new AppError('OTP invalid or expired', 400));
-
-    let user = await User.findOne({ phone: normalizedPhone });
-    const defaultProfilePicture =
-      'https://res.cloudinary.com/drinuph9d/image/upload/v1752830842/800px-User_icon_2.svg_vi5e9d.png';
-
-    if (user) {
-      user.active = true;
-      user.isPhoneVerified = true;
-      if (!user.profilePicture) user.profilePicture = defaultProfilePicture;
-      await user.save({ validateBeforeSave: false });
-      return createSendToken(user, 200, res);
+    if (!result.success || !result.verified) {
+      return next(new AppError(result.error || 'OTP invalid or expired', 400));
     }
 
-    user = await User.create({
+    
+    // New user - use OTP code as initial password
+    const user = await User.create({
       phone: normalizedPhone,
-      password,
-      passwordConfirm,
+      password: code,          // Use OTP as initial password
+      passwordConfirm: code,   // Confirm with same OTP
       isPhoneVerified: true,
       role: 'Customer',
-      profilePicture: defaultProfilePicture,
+      requirePasswordChange: true  // Flag to force password change
     });
 
     createSendToken(user, 201, res);
@@ -185,11 +346,12 @@ export const login = [
     if (!isCorrect) return next(new AppError('Invalid credentials', 401));
 
     if (!user.isPhoneVerified) {
-      const response = await sendTwilioOTP(normalizedPhone);
+      const response = await sendAfroMessageOTP(normalizedPhone);
       return res.status(200).json({
         status: 'pending',
         message: 'Phone not verified. OTP sent to your phone.',
         phone: normalizedPhone,
+        verificationId: response.verificationId
       });
     }
 
@@ -200,7 +362,7 @@ export const login = [
 // 🚪 6. Logout
 export const logout = catchAsync(async (req, res, next) => {
   res.cookie('jwt', 'loggedout', {
-    expires: new Date(Date.now() + 1000), // Expire immediately
+    expires: new Date(Date.now() + 1000),
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
@@ -244,7 +406,7 @@ export const protect = catchAsync(async (req, res, next) => {
   if (req.headers.authorization?.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1];
   } else if (req.cookies?.jwt) {
-    token = req.cookies.jwt; // Fallback to cookie
+    token = req.cookies.jwt;
   }
   if (!token) return next(new AppError('Not logged in', 401));
 
@@ -278,8 +440,12 @@ export const requestPasswordResetOTP = [
     const user = await User.findOne({ phone: normalizedPhone });
     if (!user) return next(new AppError('User not found', 404));
 
-    const response = await sendTwilioOTP(normalizedPhone);
-    res.status(200).json(response);
+    const response = await sendAfroMessageOTP(normalizedPhone);
+    
+    res.status(200).json({
+      ...response,
+      phone: normalizedPhone
+    });
   }),
 ];
 
@@ -287,27 +453,30 @@ export const requestPasswordResetOTP = [
 export const resetPasswordWithOTP = [
   body('phone').notEmpty().withMessage('Phone number is required'),
   body('code').notEmpty().withMessage('OTP code is required'),
+  body('verificationId').optional(),
   body('password')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-    .withMessage('Password must contain at least one lowercase, one uppercase, and one number'),
-  body('passwordConfirm').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match'),
+    .isLength({ min: 4 })
+    ,  body('passwordConfirm')
+    .custom((value, { req }) => value === req.body.password)
+    .withMessage('Passwords do not match'),
   catchAsync(async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return next(new AppError(errors.array()[0].msg, 400));
 
-    const { phone, code, password, passwordConfirm } = req.body;
+    const { phone, code, verificationId, password, passwordConfirm } = req.body;
     const normalizedPhone = normalizePhone(phone);
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-    const check = await client.verify.v2
-      .services(process.env.TWILIO_VERIFY_SERVICE_ID)
-      .verificationChecks.create({ to: normalizedPhone, code });
+    const result = await afroMessageService.verifyOTP(
+      code,
+      normalizedPhone,
+      verificationId
+    );
 
-    if (check.status !== 'approved') return next(new AppError('OTP invalid or expired', 400));
+    if (!result.success || !result.verified) {
+      return next(new AppError(result.error || 'OTP invalid or expired', 400));
+    }
 
     const user = await User.findOne({ phone: normalizedPhone }).select('+password');
     if (!user) return next(new AppError('User not found', 404));
@@ -326,10 +495,9 @@ export const updatePassword = [
     .notEmpty()
     .withMessage('Password is required')
     .isLength({ min: 4 })
-    .withMessage('Password must be at least 4 characters')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-    .withMessage('Password must contain at least one lowercase, one uppercase, and one number'),
-  body('passwordConfirm').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match'),
+    ,  body('passwordConfirm')
+    .custom((value, { req }) => value === req.body.password)
+    .withMessage('Passwords do not match'),
   catchAsync(async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return next(new AppError(errors.array()[0].msg, 400));

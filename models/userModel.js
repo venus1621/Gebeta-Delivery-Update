@@ -86,27 +86,24 @@ const userSchema = new mongoose.Schema(
 
     profilePicture: {
       type: String,
-      validate: [validator.isURL, 'Profile picture must be a valid URL']
+      validate: [validator.isURL, 'Profile picture must be a valid URL'],
+      default: 'https://res.cloudinary.com/drinuph9d/image/upload/v1752830842/800px-User_icon_2.svg_vi5e9d.png'
     },
 
     password: {
       type: String,
-      required: [true, 'Please provide a PIN'],
-      validate: {
-        validator: v => /^\d{4}$/.test(v),
-        message: 'PIN must be exactly 4 digits'
-      },
+      required: [true, 'Please provide a password'],
       select: false
     },
 
     passwordConfirm: {
       type: String,
-      required: [true, 'Please confirm your PIN'],
+      required: [true, 'Please confirm your password'],
       validate: {
         validator: function (val) {
           return val === this.password;
         },
-        message: 'PINs do not match'
+        message: 'Passwords do not match'
       }
     },
 
@@ -147,7 +144,7 @@ const userSchema = new mongoose.Schema(
       validate: {
         validator: function (v) {
           if (this.role === 'Manager' || this.role === 'Delivery_Person') {
-            return !!v ;
+            return !!v;
           }
           return !v;
         },
@@ -179,6 +176,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    // ⭐ NEW: Flag to require password change on first login
+    requirePasswordChange: {
+      type: Boolean,
+      default: false
+    },
 
     passwordChangedAt: Date,
 
@@ -203,7 +205,7 @@ userSchema.index({ phone: 1, role: 1 });
 // Hooks
 // =======================
 
-// Hash PIN before saving
+// Hash password before saving
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 12);
@@ -211,7 +213,7 @@ userSchema.pre('save', async function (next) {
   next();
 });
 
-// Track PIN change timestamp
+// Track password change timestamp
 userSchema.pre('save', function (next) {
   if (!this.isModified('password') || this.isNew) return next();
   this.passwordChangedAt = Date.now() - 1000;
@@ -224,21 +226,21 @@ userSchema.pre(/^find/, function (next) {
   if (this.getQuery().hasOwnProperty('active')) {
     return next();
   }
-
   // Otherwise, return only active users by default
   this.find({ active: { $ne: false } });
   next();
-})
+});
+
 // =======================
 // Instance Methods
 // =======================
 
-// Compare PINs
-userSchema.methods.correctPassword = async function (candidatePIN, hashedPIN) {
-  return bcrypt.compare(candidatePIN, hashedPIN);
+// Compare passwords
+userSchema.methods.correctPassword = async function (candidatePassword, hashedPassword) {
+  return bcrypt.compare(candidatePassword, hashedPassword);
 };
 
-// Check if PIN changed after JWT issue
+// Check if password changed after JWT issue
 userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
   if (this.passwordChangedAt) {
     const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
@@ -246,8 +248,6 @@ userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
   }
   return false;
 };
-
-
 
 // =======================
 // Export Model

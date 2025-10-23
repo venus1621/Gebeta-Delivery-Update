@@ -28,6 +28,7 @@
     "express-sanitizer": "^1.0.6",
     "express-session": "^1.18.2",
     "express-validator": "^7.2.1",
+    "firebase-admin": "^13.5.0",
     "geolib": "^3.3.4",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",

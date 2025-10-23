@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import User from './models/userModel.js';
 import Order from './models/Order.js';
-
+import { db } from './firebase.js';
 // Global Maps for Tracking
 const activeDeliveryOrders = new Map(); // deliveryPersonId -> { orderId, userId }
 const lastDeliveryLocations = new Map(); // deliveryPersonId -> location
@@ -230,94 +230,88 @@ export const initSocket = (httpServer) => {
         }
       });
 
-      socket.on('acceptOrder', async ({ orderId }, callback) => {
-        const session = await mongoose.startSession();
-        session.startTransaction();
-        try {
-          const deliveryPersonId = socket.user._id;
+      socket.on("acceptOrder", async ({ orderId }, callback) => {
+    const session = await mongoose.startSession();
+  session.startTransaction();
 
-          if (!orderId) {
-            throw new Error('Order ID is required.');
-          }
+  try {
+    const deliveryPersonId = socket.user._id;
 
-          const existingOrder = await Order.findOne({
-            deliveryId: deliveryPersonId,
-            orderStatus: { $nin: ['Completed', 'Cancelled'] },
-          }).session(session);
+    if (!orderId) throw new Error("Order ID is required.");
 
-          if (existingOrder) {
-            throw new Error(
-              'You already have an active order. Complete or cancel it before accepting a new one.'
-            );
-          }
+    const existingOrder = await Order.findOne({
+      deliveryId: deliveryPersonId,
+      orderStatus: { $nin: ["Completed", "Cancelled"] },
+    }).session(session);
 
-          const order = await Order.findById(orderId)
-            .populate('userId', '_id')
-            .session(session);
-          if (!order) {
-            throw new Error('Order is not available for acceptance.');
-          }
+    if (existingOrder)
+      throw new Error(
+        "You already have an active order. Complete or cancel it before accepting a new one."
+      );
 
-          const orderVehicle = order.deliveryVehicle;
-          if (socket.user.deliveryMethod !== orderVehicle) {
-            throw new Error(
-              'You are not eligible to accept the order'
-            );
-          }
+    const order = await Order.findById(orderId)
+      .populate("userId", "_id")
+      .session(session);
 
-          const pickUpcode = generateVerificationCode();
-          order.deliveryVerificationCode = pickUpcode;
-          order.deliveryId = deliveryPersonId;
-          await order.save({ session });
+    if (!order) throw new Error("Order is not available for acceptance.");
 
-          await session.commitTransaction();
+    const orderVehicle = order.deliveryVehicle;
+    if (socket.user.deliveryMethod !== orderVehicle)
+      throw new Error("You are not eligible to accept the order.");
 
-          const activeOrderData = {
-            orderId,
-            userId: order.userId._id.toString()
-          };
-          activeDeliveryOrders.set(deliveryPersonId.toString(), activeOrderData);
-          socket.activeOrder = activeOrderData;
+    const pickUpcode = generateVerificationCode();
+    order.deliveryVerificationCode = pickUpcode;
+    order.deliveryId = deliveryPersonId;
+    await order.save({ session });
 
-          socket.emit('requestLocationUpdate', { reason: 'orderAccepted' });
+    await session.commitTransaction();
 
-          notifyCustomer(io, order.userId._id.toString(), {
-            type: 'orderAccepted',
-            orderId,
-            deliveryPersonId,
-            message: `Your order ${order.orderCode} has been accepted by a delivery person!`
-          });
+    // ✅ Store active order data
+    const activeOrderData = {
+      orderId,
+      userId: order.userId._id.toString(),
+    };
+    activeDeliveryOrders.set(deliveryPersonId.toString(), activeOrderData);
+    socket.activeOrder = activeOrderData;
 
-          callback({
-            status: 'success',
-            message: `Order ${order.orderCode} accepted.`,
-            data: {
-              restaurantLocation: order.restaurantLocation,
-              deliverLocation: order.destinationLocation,
-              deliveryFee: parseFloat(order.deliveryFee?.toString() || "0"),
-              tip: parseFloat(order.tip?.toString() || "0"),
-              distanceKm: order.distanceKm,
-              description: order.description,
-              status: order.orderStatus,
-              orderCode: order.orderCode,
-              pickUpVerification: order.deliveryVerificationCode,
-            },
-          });  
+    // ✅ Save initial delivery location info in Firebase
+    const locationRef = firebaseDB.ref(`deliveryLocations/${deliveryPersonId}`);
+    await locationRef.set({
+      orderId,
+      deliveryPersonId,
+      status: "active",
+      lat: 0,
+      lng: 0,
+      lastUpdated: Date.now(),
+    });
 
-        } catch (error) {
-          await session.abortTransaction();
-          console.error('Error accepting order:', error);
-          let message = error.message || 'An error occurred while accepting the order.';
-          if (error.name === 'CastError') message = 'Invalid order ID.';
-          callback({
-            status: 'error',
-            message,
-            ...(error.activeOrder && { activeOrder: error.activeOrder }),
-          });
-        } finally {
-          session.endSession();
-        }
-      });
+    // ✅ Send confirmation to the delivery person
+    callback({
+      status: "success",
+      message: `Order ${order.orderCode} accepted.`,
+      data: {
+        restaurantLocation: order.restaurantLocation,
+        deliverLocation: order.destinationLocation,
+        deliveryFee: parseFloat(order.deliveryFee?.toString() || "0"),
+        tip: parseFloat(order.tip?.toString() || "0"),
+        distanceKm: order.distanceKm,
+        description: order.description,
+        status: order.orderStatus,
+        orderCode: order.orderCode,
+        pickUpVerification: order.deliveryVerificationCode,
+      },
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("Error accepting order:", error);
+    callback({
+      status: "error",
+      message: error.message || "An error occurred while accepting the order.",
+    });
+  } finally {
+    session.endSession();
+  }
+});
 
       socket.on('completeOrder', async ({ orderId }, callback) => {
         const session = await mongoose.startSession();
