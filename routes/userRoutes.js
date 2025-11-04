@@ -10,7 +10,7 @@ import {
   resetPasswordWithOTP,
   updatePassword,
   protect,
-  restrictTo
+  restrictTo,
 } from '../controllers/authController.js';
 
 import {
@@ -21,11 +21,9 @@ import {
   deleteUser,
   activateUser,
   updateMe,
- 
   getMyAddresses,
   editAddress,
   deleteAddress,
-
   saveCurrentAddress
 } from '../controllers/userController.js';
 
@@ -43,7 +41,6 @@ router.post('/signup', signup);
 // Login with phone & password
 router.post('/login', login);
 
-router.post('/getMe', protect, getMe);
 // Send OTP (generic use)
 router.post('/sendOTP', sendOTP);
 
@@ -67,6 +64,7 @@ router.post('/resetPasswordOTP', resetPasswordWithOTP);
 
 router.use(protect);
 
+router.post('/getMe', getMe);
 // Update current user's password
 router.patch('/updateMyPassword', updatePassword);
 

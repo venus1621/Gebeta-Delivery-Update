@@ -100,6 +100,6 @@ app.get('/', (req, res) => {
 app.use((req, res, next) => { next(new AppError("Can't find ${req.originalUrl} on this server!", 404)); });
 
 // // 🧨 Global error handler
-// app.use(globalErrorHandler);
+app.use(globalErrorHandler);
 
 export default app;

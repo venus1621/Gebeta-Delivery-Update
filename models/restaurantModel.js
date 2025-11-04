@@ -10,8 +10,7 @@ const restaurantSchema = new mongoose.Schema(
     // Basic Information
     name: {
       type: String,
-      required: [true, 'Restaurant name is required'],
-     
+      required: [true, 'Restaurant name is required'], 
       trim: true,
       maxlength: [100, 'Restaurant name must not exceed 100 characters'],
       minlength: [3, 'Restaurant name must be at least 3 characters long']

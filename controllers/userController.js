@@ -402,7 +402,7 @@ export const editAddress = catchAsync(async (req, res, next) => {
   if (!address) return next(new AppError('Address not found', 404));
 
   // ✅ 3. Extract fields to update
-  const { name, label, additionalInfo, isDefault, location } = req.body;
+  const { name, label, additionalInfo } = req.body;
 
   // ✅ 4. Update allowed fields
   if (name) address.name = name;
@@ -415,20 +415,6 @@ export const editAddress = catchAsync(async (req, res, next) => {
   }
 
   if (additionalInfo) address.additionalInfo = additionalInfo;
-
-  // ✅ 5. Update coordinates if provided
-  if (location?.lat && location?.lng) {
-    address.location = {
-      type: 'Point',
-      coordinates: [location.lng, location.lat]
-    };
-  }
-
-  // ✅ 6. Handle default address
-  if (isDefault) {
-    user.addresses.forEach(addr => (addr.isDefault = false));
-    address.isDefault = true;
-  }
 
   // ✅ 7. Save changes
   await user.save({ validateBeforeSave: false });
@@ -443,8 +429,7 @@ export const editAddress = catchAsync(async (req, res, next) => {
 // DELETE /api/v1/users/address/:addressId
 export const deleteAddress = catchAsync(async (req, res, next) => {
   const userId = req.user.id;
-  const addressId = req.params.addressId; // _id of the address subdocument
-
+  const addressId = req.params.addressId;
   // 1️⃣ Find user
   const user = await User.findById(userId);
   if (!user) return next(new AppError('User not found', 404));

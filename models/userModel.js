@@ -50,6 +50,7 @@ const userSchema = new mongoose.Schema(
     firstName: {
       type: String,
       trim: true,
+      default:"user",
       validate: {
         validator: v => validator.isAlpha(v, 'en-US'),
         message: 'First name must contain only letters'
